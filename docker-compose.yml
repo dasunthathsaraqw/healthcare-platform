@@ -1,0 +1,131 @@
+version: "3.8"
+
+services:
+  # Databases
+  patient-db:
+    image: mongo:latest
+    container_name: patient-db
+    ports:
+      - "27017:27017"
+    volumes:
+      - patient-data:/data/db
+    networks:
+      - healthcare-network
+
+  doctor-db:
+    image: mongo:latest
+    container_name: doctor-db
+    ports:
+      - "27018:27017"
+    volumes:
+      - doctor-data:/data/db
+    networks:
+      - healthcare-network
+
+  appointment-db:
+    image: mongo:latest
+    container_name: appointment-db
+    ports:
+      - "27019:27017"
+    volumes:
+      - appointment-data:/data/db
+    networks:
+      - healthcare-network
+
+  # Backend Services
+  patient-service:
+    build: ./services/patient-service
+    container_name: patient-service
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DB_URL=mongodb://patient-db:27017/patientdb
+      - NODE_ENV=development
+    depends_on:
+      - patient-db
+    networks:
+      - healthcare-network
+    volumes:
+      - ./services/patient-service:/app
+      - /app/node_modules
+
+  doctor-service:
+    build: ./services/doctor-service
+    container_name: doctor-service
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - DB_URL=mongodb://doctor-db:27017/doctordb
+      - NODE_ENV=development
+    depends_on:
+      - doctor-db
+    networks:
+      - healthcare-network
+    volumes:
+      - ./services/doctor-service:/app
+      - /app/node_modules
+
+  appointment-service:
+    build: ./services/appointment-service
+    container_name: appointment-service
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - DB_URL=mongodb://appointment-db:27017/appointmentdb
+      - PATIENT_SERVICE_URL=http://patient-service:3001
+      - DOCTOR_SERVICE_URL=http://doctor-service:3002
+      - NODE_ENV=development
+    depends_on:
+      - appointment-db
+      - patient-service
+      - doctor-service
+    networks:
+      - healthcare-network
+    volumes:
+      - ./services/appointment-service:/app
+      - /app/node_modules
+
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - PATIENT_SERVICE=http://patient-service:3001
+      - DOCTOR_SERVICE=http://doctor-service:3002
+      - APPOINTMENT_SERVICE=http://appointment-service:3003
+    depends_on:
+      - patient-service
+      - doctor-service
+      - appointment-service
+    networks:
+      - healthcare-network
+    volumes:
+      - ./services/api-gateway:/app
+      - /app/node_modules
+
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - healthcare-network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+networks:
+  healthcare-network:
+    driver: bridge
+
+volumes:
+  patient-data:
+  doctor-data:
+  appointment-data:
