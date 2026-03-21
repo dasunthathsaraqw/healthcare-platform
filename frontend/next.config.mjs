@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Enable API routes proxying
+  output: "standalone",
   async rewrites() {
     return [
       {

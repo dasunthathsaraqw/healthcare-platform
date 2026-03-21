@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # Databases
   patient-db:
@@ -75,9 +73,6 @@ services:
       - patient-db
     networks:
       - healthcare-network
-    volumes:
-      - ./services/patient-service:/app
-      - /app/node_modules
 
   doctor-service:
     build: ./services/doctor-service
@@ -92,9 +87,6 @@ services:
       - doctor-db
     networks:
       - healthcare-network
-    volumes:
-      - ./services/doctor-service:/app
-      - /app/node_modules
 
   appointment-service:
     build: ./services/appointment-service
@@ -113,9 +105,6 @@ services:
       - doctor-service
     networks:
       - healthcare-network
-    volumes:
-      - ./services/appointment-service:/app
-      - /app/node_modules
 
   payment-service:
     build: ./services/payment-service
@@ -130,12 +119,8 @@ services:
     depends_on:
       - payment-db
       - appointment-service
-      - rabbitmq
     networks:
       - healthcare-network
-    volumes:
-      - ./services/payment-service:/app
-      - /app/node_modules
 
   notification-service:
     build: ./services/notification-service
@@ -148,16 +133,12 @@ services:
       - NODE_ENV=development
     depends_on:
       - notification-db
-      - rabbitmq
     networks:
       - healthcare-network
-    volumes:
-      - ./services/notification-service:/app
-      - /app/node_modules
 
   ai-symptom-checker:
-    build: ./services/ai-symptom-checker
-    container_name: ai-symptom-checker
+    build: ./services/ai-symptom-checker-service
+    container_name: ai-symptom-checker-service
     ports:
       - "3006:3006"
     environment:
@@ -165,9 +146,6 @@ services:
       - NODE_ENV=development
     networks:
       - healthcare-network
-    volumes:
-      - ./services/ai-symptom-checker:/app
-      - /app/node_modules
 
   api-gateway:
     build: ./services/api-gateway
@@ -192,22 +170,16 @@ services:
       - ai-symptom-checker
     networks:
       - healthcare-network
-    volumes:
-      - ./services/api-gateway:/app
-      - /app/node_modules
 
   frontend:
     build: ./frontend
     container_name: frontend
     ports:
-      - "3000:80"
+      - "3000:3000"
     depends_on:
       - api-gateway
     networks:
       - healthcare-network
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
 
 networks:
   healthcare-network:
@@ -219,3 +191,4 @@ volumes:
   appointment-data:
   payment-data:
   notification-data:
+  ai-symptom-checker-data:
