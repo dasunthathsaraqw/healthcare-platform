@@ -24,7 +24,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load user on mount
+  // Load user only on client side after mount
   useEffect(() => {
     loadUser();
   }, []);
@@ -35,12 +35,10 @@ export function AuthProvider({ children }) {
       const userData = authService.getCurrentUserFromStorage();
 
       if (userData && authService.isAuthenticated()) {
-        // Verify token by fetching current user
         const freshUser = await authService.getCurrentUser();
         if (freshUser) {
           setUser(freshUser);
         } else {
-          // Token invalid
           authService.clearSession();
           setUser(null);
         }

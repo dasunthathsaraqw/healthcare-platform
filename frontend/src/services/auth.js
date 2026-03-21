@@ -63,7 +63,7 @@ class AuthService {
   }
 
   /**
-   * Set session data
+   * Set session data - safe for server-side
    */
   setSession(token, user) {
     if (typeof window !== "undefined") {
@@ -73,7 +73,7 @@ class AuthService {
   }
 
   /**
-   * Clear session data
+   * Clear session data - safe for server-side
    */
   clearSession() {
     if (typeof window !== "undefined") {
@@ -83,7 +83,7 @@ class AuthService {
   }
 
   /**
-   * Get token
+   * Get token - safe for server-side
    */
   getToken() {
     if (typeof window !== "undefined") {
@@ -93,7 +93,7 @@ class AuthService {
   }
 
   /**
-   * Get current user from storage
+   * Get current user from storage - safe for server-side
    */
   getCurrentUserFromStorage() {
     if (typeof window !== "undefined") {
@@ -104,26 +104,35 @@ class AuthService {
   }
 
   /**
-   * Check if user is authenticated
+   * Check if user is authenticated - safe for server-side
    */
   isAuthenticated() {
-    return !!this.getToken();
+    if (typeof window !== "undefined") {
+      return !!this.getToken();
+    }
+    return false;
   }
 
   /**
-   * Check if user has specific role
+   * Check if user has specific role - safe for server-side
    */
   hasRole(role) {
-    const user = this.getCurrentUserFromStorage();
-    return user?.role === role;
+    if (typeof window !== "undefined") {
+      const user = this.getCurrentUserFromStorage();
+      return user?.role === role;
+    }
+    return false;
   }
 
   /**
    * Check if user has any of the specified roles
    */
   hasAnyRole(roles) {
-    const user = this.getCurrentUserFromStorage();
-    return user && roles.includes(user.role);
+    if (typeof window !== "undefined") {
+      const user = this.getCurrentUserFromStorage();
+      return user && roles.includes(user.role);
+    }
+    return false;
   }
 }
 
