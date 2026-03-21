@@ -32,8 +32,12 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Routes
+// health Routes
 app.use("/api/patients", require("./src/routes/patientRoutes-auth"));
+
+// Authentication and User Management Routes
+app.use("/api/auth", require("./src/routes/authRoutes"));
+app.use("/api/users", require("./src/routes/userRoutes"));
 
 // Error Handler
 app.use((err, req, res, next) => {

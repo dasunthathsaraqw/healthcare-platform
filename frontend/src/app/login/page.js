@@ -3,17 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import api from "@/services/api";
+import { useAuth } from "@/context/AuthContext";
+import { USER_ROLES } from "@/constants/roles";
 
-export default function Login() {
+export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
-    role: "patient", // patient, doctor, admin
+    role: USER_ROLES.PATIENT,
   });
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -27,76 +29,77 @@ export default function Login() {
     setError("");
     setLoading(true);
 
-    try {
-      // Call login endpoint
-      const response = await api.post("/auth/login", {
-        email: formData.email,
-        password: formData.password,
-        role: formData.role,
-      });
+    const result = await login(
+      formData.email,
+      formData.password,
+      formData.role,
+    );
 
-      // Store token
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("user", JSON.stringify(response.data.user));
-
+    if (result.success) {
       // Redirect based on role
-      if (response.data.user.role === "admin") {
-        router.push("/admin/dashboard");
-      } else if (response.data.user.role === "doctor") {
+      if (result.user.role === USER_ROLES.DOCTOR) {
         router.push("/doctor/dashboard");
+      } else if (result.user.role === USER_ROLES.ADMIN) {
+        router.push("/admin/dashboard");
       } else {
         router.push("/dashboard");
       }
-    } catch (err) {
-      setError(err.response?.data?.message || "Login failed");
-    } finally {
-      setLoading(false);
+    } else {
+      setError(result.error);
     }
+
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Sign in to your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{" "}
-            <Link
-              href="/register"
-              className="font-medium text-blue-600 hover:text-blue-500"
-            >
-              create a new account
-            </Link>
-          </p>
-        </div>
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          Sign in to your account
+        </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          Or{" "}
+          <Link
+            href="/register"
+            className="font-medium text-blue-600 hover:text-blue-500"
+          >
+            create a new account
+          </Link>
+        </p>
+      </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div className="mb-4 bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
           )}
 
-          <div className="rounded-md shadow-sm -space-y-px">
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="email" className="sr-only">
-                Email address
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Email Address
               </label>
               <input
                 id="email"
                 name="email"
                 type="email"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
                 value={formData.email}
                 onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
+
             <div>
-              <label htmlFor="password" className="sr-only">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700"
+              >
                 Password
               </label>
               <input
@@ -104,40 +107,41 @@ export default function Login() {
                 name="password"
                 type="password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
                 value={formData.password}
                 onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
+
             <div>
-              <label htmlFor="role" className="sr-only">
-                Role
+              <label
+                htmlFor="role"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Login as
               </label>
               <select
                 id="role"
                 name="role"
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 value={formData.role}
                 onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="patient">Patient</option>
-                <option value="doctor">Doctor</option>
-                <option value="admin">Admin</option>
+                <option value={USER_ROLES.PATIENT}>Patient</option>
+                <option value={USER_ROLES.DOCTOR}>Doctor</option>
+                <option value={USER_ROLES.ADMIN}>Admin</option>
               </select>
             </div>
-          </div>
 
-          <div>
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );
