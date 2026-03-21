@@ -32,6 +32,35 @@ services:
     networks:
       - healthcare-network
 
+  payment-db:
+    image: mongo:latest
+    container_name: payment-db
+    ports:
+      - "27020:27017"
+    volumes:
+      - payment-data:/data/db
+    networks:
+      - healthcare-network
+
+  notification-db:
+    image: mongo:latest
+    container_name: notification-db
+    ports:
+      - "27021:27017"
+    volumes:
+      - notification-data:/data/db
+    networks:
+      - healthcare-network
+
+  ai-symptom-checker-db:
+    image: mongo:latest
+    container_name: ai-symptom-checker-db
+    ports:
+      - "27022:27017"
+    volumes:
+      - ai-symptom-checker-data:/data/db
+    networks:
+      - healthcare-network
   # Backend Services
   patient-service:
     build: ./services/patient-service
@@ -88,6 +117,58 @@ services:
       - ./services/appointment-service:/app
       - /app/node_modules
 
+  payment-service:
+    build: ./services/payment-service
+    container_name: payment-service
+    ports:
+      - "3004:3004"
+    environment:
+      - PORT=3004
+      - DB_URL=mongodb://payment-db:27017/paymentdb
+      - APPOINTMENT_SERVICE_URL=http://appointment-service:3003
+      - NODE_ENV=development
+    depends_on:
+      - payment-db
+      - appointment-service
+      - rabbitmq
+    networks:
+      - healthcare-network
+    volumes:
+      - ./services/payment-service:/app
+      - /app/node_modules
+
+  notification-service:
+    build: ./services/notification-service
+    container_name: notification-service
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - DB_URL=mongodb://notification-db:27017/notificationdb
+      - NODE_ENV=development
+    depends_on:
+      - notification-db
+      - rabbitmq
+    networks:
+      - healthcare-network
+    volumes:
+      - ./services/notification-service:/app
+      - /app/node_modules
+
+  ai-symptom-checker:
+    build: ./services/ai-symptom-checker
+    container_name: ai-symptom-checker
+    ports:
+      - "3006:3006"
+    environment:
+      - PORT=3006
+      - NODE_ENV=development
+    networks:
+      - healthcare-network
+    volumes:
+      - ./services/ai-symptom-checker:/app
+      - /app/node_modules
+
   api-gateway:
     build: ./services/api-gateway
     container_name: api-gateway
@@ -98,10 +179,17 @@ services:
       - PATIENT_SERVICE=http://patient-service:3001
       - DOCTOR_SERVICE=http://doctor-service:3002
       - APPOINTMENT_SERVICE=http://appointment-service:3003
+      - PAYMENT_SERVICE=http://payment-service:3004
+      - NOTIFICATION_SERVICE=http://notification-service:3005
+      - AI_SYMPTOM_CHECKER=http://ai-symptom-checker:3006
+      - JWT_SECRET=${JWT_SECRET}
     depends_on:
       - patient-service
       - doctor-service
       - appointment-service
+      - payment-service
+      - notification-service
+      - ai-symptom-checker
     networks:
       - healthcare-network
     volumes:
@@ -129,3 +217,5 @@ volumes:
   patient-data:
   doctor-data:
   appointment-data:
+  payment-data:
+  notification-data:
