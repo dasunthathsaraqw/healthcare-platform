@@ -17,23 +17,25 @@ app.use(express.urlencoded({ extended: true }));
 mongoose
   .connect(process.env.DB_URL)
   .then(() =>
-    console.log("--Doctor Service: Connected to Doctor Service MongoDB--"),
+    console.log(
+      "--Notification Service: Connected to Notification Service MongoDB--",
+    ),
   )
   .catch((err) =>
-    console.error("Doctor Service: MongoDB connection error:", err),
+    console.error("Notification Service: MongoDB connection error:", err),
   );
 
 // Health Check
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "OK",
-    service: "doctor-service",
+    service: "notification-service",
     timestamp: new Date().toISOString(),
   });
 });
 
 // Routes
-app.use("/api/doctors", require("./src/routes/doctorRouter-auth"));
+app.use("/api/notifications", require("./src/routes/notificationRoutes-auth"));
 
 // Error Handler
 app.use((err, req, res, next) => {
@@ -50,5 +52,5 @@ app.use((req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`--Doctor Service running on port ${PORT}--`);
+  console.log(`--Notification Service running on port ${PORT}--`);
 });

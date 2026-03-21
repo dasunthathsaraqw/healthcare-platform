@@ -16,7 +16,11 @@ app.use(express.urlencoded({ extended: true }));
 // MongoDB Connection
 mongoose
   .connect(process.env.DB_URL)
-  .then(() => console.log("--Appointment Service: Connected to MongoDB--"))
+  .then(() =>
+    console.log(
+      "--Appointment Service: Connected to Appointment Service MongoDB--",
+    ),
+  )
   .catch((err) =>
     console.error("Appointment Service: MongoDB connection error:", err),
   );

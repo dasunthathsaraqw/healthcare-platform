@@ -17,23 +17,23 @@ app.use(express.urlencoded({ extended: true }));
 mongoose
   .connect(process.env.DB_URL)
   .then(() =>
-    console.log("--Doctor Service: Connected to Doctor Service MongoDB--"),
+    console.log("--Payment Service: Connected to Payment Service MongoDB--"),
   )
   .catch((err) =>
-    console.error("Doctor Service: MongoDB connection error:", err),
+    console.error("Payment Service: MongoDB connection error:", err),
   );
 
 // Health Check
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "OK",
-    service: "doctor-service",
+    service: "payment-service",
     timestamp: new Date().toISOString(),
   });
 });
 
 // Routes
-app.use("/api/doctors", require("./src/routes/doctorRouter-auth"));
+app.use("/api/payments", require("./src/routes/paymentRoutes-auth"));
 
 // Error Handler
 app.use((err, req, res, next) => {
@@ -50,5 +50,5 @@ app.use((req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`--Doctor Service running on port ${PORT}--`);
+  console.log(`--Payment Service running on port ${PORT}--`);
 });
