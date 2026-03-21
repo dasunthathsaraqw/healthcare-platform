@@ -15,11 +15,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // MongoDB Connection
 mongoose
-  .connect(process.env.DB_URL, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log("---Patient Service: Connected to MongoDB---"))
+  .connect(process.env.DB_URL)
+  .then(() => console.log("--Patient Service: Connected to MongoDB--"))
   .catch((err) =>
     console.error("Patient Service: MongoDB connection error:", err),
   );
@@ -33,8 +30,8 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Routes (to be implemented by team)
-app.use("/api/patients", require("./src/routes/patientRoutes"));
+// Routes
+app.use("/api/patients", require("./src/routes/patientRoutes-auth"));
 
 // Error Handler
 app.use((err, req, res, next) => {
