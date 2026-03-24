@@ -1,116 +1,78 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-} from "react";
-import authService from "@/services/auth";
+import { createContext, useContext, useState, useEffect } from "react";
+import authService from "@/services/authService";
+import { useRouter } from "next/navigation";
 
 const AuthContext = createContext();
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
+  return useContext(AuthContext);
 }
+
+// Helper for browser check
+const isBrowser = typeof window !== "undefined";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const router = useRouter();
 
-  // Load user only on client side after mount
   useEffect(() => {
-    loadUser();
+    // This only runs in browser, so safe to use localStorage
+    const storedUser = authService.getCurrentUserFromStorage();
+    if (storedUser) {
+      setUser(storedUser);
+    }
+    setLoading(false);
   }, []);
 
-  const loadUser = async () => {
+  const login = async (email, password) => {
     try {
-      setLoading(true);
-      const userData = authService.getCurrentUserFromStorage();
-
-      if (userData && authService.isAuthenticated()) {
-        const freshUser = await authService.getCurrentUser();
-        if (freshUser) {
-          setUser(freshUser);
-        } else {
-          authService.clearSession();
-          setUser(null);
-        }
-      } else {
-        setUser(null);
-      }
-    } catch (err) {
-      console.error("Error loading user:", err);
-      setUser(null);
-    } finally {
-      setLoading(false);
+      const response = await authService.login(email, password);
+      setUser(response.user);
+      return { success: true, user: response.user };
+    } catch (error) {
+      return { success: false, error: error.message };
     }
   };
 
-  const login = useCallback(async (email, password, role) => {
+  const register = async (userData) => {
     try {
-      setError(null);
-      const response = await authService.login(email, password, role);
-
-      if (response.success) {
-        setUser(response.data.user);
-        return { success: true, user: response.data.user };
-      } else {
-        setError(response.message);
-        return { success: false, error: response.message };
-      }
-    } catch (err) {
-      const errorMessage = err.message || "Login failed";
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
-    }
-  }, []);
-
-  const register = useCallback(async (userData) => {
-    try {
-      setError(null);
       const response = await authService.register(userData);
-
-      if (response.success) {
-        setUser(response.data.user);
-        return { success: true, user: response.data.user };
-      } else {
-        setError(response.message);
-        return { success: false, error: response.message };
-      }
-    } catch (err) {
-      const errorMessage = err.message || "Registration failed";
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
+      setUser(response.user);
+      return { success: true, user: response.user };
+    } catch (error) {
+      return { success: false, error: error.message };
     }
-  }, []);
+  };
 
-  const logout = useCallback(async () => {
+  const logout = () => {
+    authService.logout();
+    setUser(null);
+    if (isBrowser) {
+      router.push("/login");
+    }
+  };
+
+  const updateProfile = async (profileData) => {
     try {
-      await authService.logout();
-    } finally {
-      setUser(null);
-      setError(null);
+      const response = await authService.updateProfile(profileData);
+      setUser(response.user);
+      return { success: true, user: response.user };
+    } catch (error) {
+      return { success: false, error: error.message };
     }
-  }, []);
+  };
 
   const value = {
     user,
     loading,
-    error,
     login,
     register,
     logout,
-    isAuthenticated: !!user,
-    isPatient: user?.role === "patient",
-    isDoctor: user?.role === "doctor",
-    isAdmin: user?.role === "admin",
+    updateProfile,
+    isAuthenticated: isBrowser ? authService.isAuthenticated() : false,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

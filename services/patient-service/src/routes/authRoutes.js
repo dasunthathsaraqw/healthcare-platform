@@ -1,36 +1,35 @@
 const express = require("express");
 const router = express.Router();
 const authController = require("../controllers/authController");
-const { authenticate } = require("../middleware/authMiddleware");
-const { validate } = require("../middleware/validationMiddleware");
-const { registerValidation, loginValidation } = require("../utils/validators");
+const { authenticate, authorize, ROLES } = require("../middleware/auth");
+const {
+  validateRegister,
+  validateLogin,
+  handleValidationErrors,
+} = require("../middleware/validate");
 
-/**
- * @route   POST /api/auth/register
- * @desc    Register a new user
- * @access  Public
- */
-router.post("/register", validate(registerValidation), authController.register);
+// Public routes (no authentication required)
+router.post(
+  "/register",
+  validateRegister,
+  handleValidationErrors,
+  authController.register,
+);
+router.post(
+  "/login",
+  validateLogin,
+  handleValidationErrors,
+  authController.login,
+);
 
-/**
- * @route   POST /api/auth/login
- * @desc    Login user
- * @access  Public
- */
-router.post("/login", validate(loginValidation), authController.login);
-
-/**
- * @route   GET /api/auth/me
- * @desc    Get current authenticated user
- * @access  Private
- */
+// Protected routes (authentication required)
 router.get("/me", authenticate, authController.getCurrentUser);
+router.put("/change-password", authenticate, authController.changePassword);
+router.put("/profile", authenticate, authController.updateProfile);
 
-/**
- * @route   POST /api/auth/logout
- * @desc    Logout user
- * @access  Private
- */
-router.post("/logout", authenticate, authController.logout);
+// Example of role-protected route (only admin)
+router.get("/admin-only", authenticate, authorize(ROLES.ADMIN), (req, res) => {
+  res.json({ message: "Admin access granted" });
+});
 
 module.exports = router;

@@ -1,8 +1,6 @@
-import { Inter } from "next/font/google";
+import "@fontsource/inter"; // Import the font
 import "./globals.css";
-import AuthProvider from "@/components/AuthProvider";
-
-const inter = Inter({ subsets: ["latin"] });
+import { AuthProvider } from "../context/AuthContext";
 
 export const metadata = {
   title: "Healthcare Platform",
@@ -13,7 +11,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className="font-sans antialiased">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

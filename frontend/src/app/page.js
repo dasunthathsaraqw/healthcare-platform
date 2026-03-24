@@ -13,7 +13,7 @@ export default function Home() {
       <div className="container mx-auto px-4 py-16">
         <div className="text-center">
           <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            Smart Healthcare Platform
+            Smart Healthcare Platform test 111
           </h1>
           <p className="text-xl text-gray-600 mb-8">
             Book appointments, consult doctors online, and manage your health

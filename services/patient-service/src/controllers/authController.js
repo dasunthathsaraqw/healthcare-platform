@@ -1,264 +1,212 @@
 const User = require("../models/User");
-const Patient = require("../models/Patient");
-const Doctor = require("../models/Doctor");
-const { generateToken } = require("../utils/jwt");
-const {
-  USER_ROLES,
-  RESPONSE_MESSAGES,
-  HTTP_STATUS,
-} = require("../utils/constants");
-const { registerValidation, loginValidation } = require("../utils/validators");
-const { sanitizeInput } = require("../middleware/validationMiddleware");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const { ROLES } = require("../constants/roles");
 
-/**
- * Register a new user (Patient or Doctor)
- */
-const register = async (req, res) => {
+// Generate JWT token
+const generateToken = (userId, userRole) => {
+  return jwt.sign(
+    { userId: userId.toString(), role: userRole }, // Include role in token
+    process.env.JWT_SECRET || "your-secret-key",
+    { expiresIn: "7d" },
+  );
+};
+
+// Register new user
+exports.register = async (req, res) => {
   try {
-    // Sanitize input
-    const sanitizedData = sanitizeInput(req.body);
+    console.log("📝 Registration request:", req.body);
 
-    // Validate input
-    const { isValid, errors } = registerValidation(sanitizedData);
-    if (!isValid) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+    const { name, email, password, role, phone } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !password) {
+      return res.status(400).json({
         success: false,
-        errors: errors,
+        message: "Name, email and password are required",
       });
     }
-
-    const { name, email, password, role, phone, ...additionalData } =
-      sanitizedData;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(HTTP_STATUS.CONFLICT).json({
+      return res.status(400).json({
         success: false,
-        message: RESPONSE_MESSAGES.EMAIL_EXISTS,
+        message: "User with this email already exists",
       });
     }
 
-    let user;
+    // Hash the password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user based on role
-    if (role === USER_ROLES.PATIENT) {
-      user = await Patient.create({
-        name,
-        email,
-        password,
-        role: USER_ROLES.PATIENT,
-        phone,
-        ...additionalData,
-      });
-    } else if (role === USER_ROLES.DOCTOR) {
-      // Validate doctor-specific fields
-      if (
-        !additionalData.specialty ||
-        !additionalData.licenseNumber ||
-        !additionalData.consultationFee
-      ) {
-        return res.status(HTTP_STATUS.BAD_REQUEST).json({
-          success: false,
-          message:
-            "Specialty, license number, and consultation fee are required for doctors",
-        });
-      }
+    // Create new user with hashed password
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword, // Store hashed password
+      role: role || ROLES.PATIENT,
+      phone: phone || "",
+      // If doctor, requires verification
+      isVerified: role === ROLES.DOCTOR ? false : true,
+    });
 
-      user = await Doctor.create({
-        name,
-        email,
-        password,
-        role: USER_ROLES.DOCTOR,
-        phone,
-        specialty: additionalData.specialty,
-        licenseNumber: additionalData.licenseNumber,
-        consultationFee: additionalData.consultationFee,
-        qualifications: additionalData.qualifications || [],
-        experience: additionalData.experience || 0,
-        ...additionalData,
-      });
-    } else {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        message: "Invalid role specified",
-      });
-    }
+    console.log("💾 Saving user...");
+    await user.save();
+    console.log("✅ User saved successfully");
 
     // Generate token
-    const token = generateToken(user);
+    const token = generateToken(user._id, user.role);
 
-    // Return user data (without password) and token
-    const userResponse = user.toJSON();
-
-    return res.status(HTTP_STATUS.CREATED).json({
+    // Return response
+    res.status(201).json({
       success: true,
-      message: RESPONSE_MESSAGES.REGISTER_SUCCESS,
-      data: {
-        user: userResponse,
-        token,
-      },
+      message: "User registered successfully",
+      token,
+      user: user.getPublicProfile(),
     });
   } catch (error) {
-    console.error("Registration error:", error);
-    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+    console.error("❌ Registration error:", error);
+    res.status(500).json({
       success: false,
-      message: "Registration failed. Please try again.",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      message: "Registration failed",
+      error: error.message,
     });
   }
 };
 
-/**
- * Login user
- */
-const login = async (req, res) => {
+// Login user
+exports.login = async (req, res) => {
   try {
-    // Sanitize input
-    const sanitizedData = sanitizeInput(req.body);
+    const { email, password } = req.body;
 
-    // Validate input
-    const { isValid, errors } = loginValidation(sanitizedData);
-    if (!isValid) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        errors: errors,
-      });
-    }
-
-    const { email, password, role } = sanitizedData;
-
-    // Find user with password field
-    const user = await User.findOne({ email }).select("+password");
-
+    // Find user by email
+    const user = await User.findOne({ email });
     if (!user) {
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      return res.status(401).json({
         success: false,
-        message: RESPONSE_MESSAGES.INVALID_CREDENTIALS,
-      });
-    }
-
-    // Check if role matches (if provided)
-    if (role && user.role !== role) {
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-        success: false,
-        message: `Invalid credentials for ${role} account`,
+        message: "Invalid email or password",
       });
     }
 
     // Check if account is active
     if (!user.isActive) {
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      return res.status(401).json({
         success: false,
-        message: RESPONSE_MESSAGES.ACCOUNT_DISABLED,
+        message: "Your account has been deactivated. Please contact admin.",
       });
     }
 
-    // Check if doctor is verified
-    if (user.role === USER_ROLES.DOCTOR && !user.isVerified) {
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-        success: false,
-        message: RESPONSE_MESSAGES.DOCTOR_NOT_VERIFIED,
-      });
-    }
-
-    // Verify password
+    // Check password
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      return res.status(401).json({
         success: false,
-        message: RESPONSE_MESSAGES.INVALID_CREDENTIALS,
+        message: "Invalid email or password",
       });
     }
 
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
-
     // Generate token
-    const token = generateToken(user);
+    const token = generateToken(user._id, user.role);
 
-    // Get user data without password
-    const userResponse = user.toJSON();
-
-    return res.status(HTTP_STATUS.OK).json({
+    // Return response
+    res.json({
       success: true,
-      message: RESPONSE_MESSAGES.LOGIN_SUCCESS,
-      data: {
-        user: userResponse,
-        token,
-      },
+      message: "Login successful",
+      token,
+      user: user.getPublicProfile(),
     });
   } catch (error) {
     console.error("Login error:", error);
-    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+    res.status(500).json({
       success: false,
-      message: "Login failed. Please try again.",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      message: "Login failed",
+      error: error.message,
     });
   }
 };
 
-/**
- * Get current authenticated user profile
- */
-const getCurrentUser = async (req, res) => {
+// Get current user profile
+exports.getCurrentUser = async (req, res) => {
   try {
-    const user = req.user;
-
-    // If doctor, get full doctor details
-    if (user.role === USER_ROLES.DOCTOR) {
-      const doctor = await Doctor.findById(user._id);
-      return res.status(HTTP_STATUS.OK).json({
-        success: true,
-        data: { user: doctor.toJSON() },
-      });
-    }
-
-    // If patient, get full patient details
-    if (user.role === USER_ROLES.PATIENT) {
-      const patient = await Patient.findById(user._id);
-      return res.status(HTTP_STATUS.OK).json({
-        success: true,
-        data: { user: patient.toJSON() },
-      });
-    }
-
-    return res.status(HTTP_STATUS.OK).json({
+    res.json({
       success: true,
-      data: { user: user.toJSON() },
+      user: req.user.getPublicProfile(),
     });
   } catch (error) {
-    console.error("Get current user error:", error);
-    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+    res.status(500).json({
       success: false,
       message: "Failed to get user profile",
+      error: error.message,
     });
   }
 };
 
-/**
- * Logout user (client-side token removal)
- */
-const logout = async (req, res) => {
+// Change password
+exports.changePassword = async (req, res) => {
   try {
-    // Since JWT is stateless, we just return success
-    // Client should remove the token from storage
-    return res.status(HTTP_STATUS.OK).json({
+    const { currentPassword, newPassword } = req.body;
+    const user = req.user;
+
+    // Verify current password
+    const isValidPassword = await user.comparePassword(currentPassword);
+    if (!isValidPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update password
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({
       success: true,
-      message: RESPONSE_MESSAGES.LOGOUT_SUCCESS,
+      message: "Password changed successfully",
     });
   } catch (error) {
-    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+    console.error("Change password error:", error);
+    res.status(500).json({
       success: false,
-      message: "Logout failed",
+      message: "Failed to change password",
+      error: error.message,
     });
   }
 };
 
-module.exports = {
-  register,
-  login,
-  getCurrentUser,
-  logout,
+// Update profile
+exports.updateProfile = async (req, res) => {
+  try {
+    const allowedUpdates = ["name", "phone", "address", "dateOfBirth"];
+    const updates = {};
+
+    allowedUpdates.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    const user = await User.findByIdAndUpdate(req.user._id, updates, {
+      new: true,
+      runValidators: true,
+    }).select("-password");
+
+    res.json({
+      success: true,
+      message: "Profile updated successfully",
+      user: user.getPublicProfile(),
+    });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update profile",
+      error: error.message,
+    });
+  }
 };

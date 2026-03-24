@@ -1,11 +1,6 @@
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
-const { USER_ROLES } = require("../utils/constants");
+const { ROLES } = require("../constants/roles");
 
-/**
- * Base User Schema
- * This is a discriminated schema that will be extended by Patient and Doctor
- */
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -13,6 +8,7 @@ const userSchema = new mongoose.Schema(
       required: [true, "Name is required"],
       trim: true,
       minlength: [2, "Name must be at least 2 characters"],
+      maxlength: [100, "Name cannot exceed 100 characters"],
     },
     email: {
       type: String,
@@ -29,69 +25,75 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, "Password is required"],
       minlength: [6, "Password must be at least 6 characters"],
-      select: false, // Don't return password by default
     },
     role: {
       type: String,
-      enum: Object.values(USER_ROLES),
-      required: [true, "Role is required"],
-      default: USER_ROLES.PATIENT,
+      enum: Object.values(ROLES),
+      default: ROLES.PATIENT,
+      required: true,
     },
     phone: {
       type: String,
       trim: true,
-      match: [/^[0-9+\-\s()]{10,15}$/, "Please provide a valid phone number"],
+      default: "",
     },
     isActive: {
       type: Boolean,
       default: true,
     },
-    lastLogin: {
+    // Patient specific fields
+    dateOfBirth: {
       type: Date,
     },
-    createdAt: {
-      type: Date,
-      default: Date.now,
+    address: {
+      street: String,
+      city: String,
+      country: String,
     },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
+    medicalHistory: [String],
+    // Doctor specific fields
+    specialty: {
+      type: String,
     },
+    qualifications: [String],
+    experience: {
+      type: Number,
+      default: 0,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    // Admin specific fields
+    permissions: [String],
   },
   {
-    discriminatorKey: "userType", // This field will distinguish between Patient and Doctor
-    collection: "users",
     timestamps: true,
   },
 );
 
-// Hash password before saving
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+// REMOVE the pre-save hook entirely
+// No more userSchema.pre("save", ...)
 
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Compare password method
+// Method to compare password
 userSchema.methods.comparePassword = async function (candidatePassword) {
+  const bcrypt = require("bcryptjs");
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// ToJSON transform to remove sensitive data
-userSchema.set("toJSON", {
-  transform: function (doc, ret) {
-    delete ret.password;
-    delete ret.__v;
-    return ret;
-  },
-});
+// Method to check if user has permission
+userSchema.methods.hasPermission = function (permission) {
+  const { PERMISSIONS } = require("../constants/roles");
+  const userPermissions = PERMISSIONS[this.role] || [];
+  return userPermissions.includes(permission);
+};
 
-const User = mongoose.model("User", userSchema);
+// Method to get public profile (exclude sensitive data)
+userSchema.methods.getPublicProfile = function () {
+  const userObject = this.toObject();
+  delete userObject.password;
+  delete userObject.__v;
+  return userObject;
+};
 
-module.exports = User;
+module.exports = mongoose.model("User", userSchema);

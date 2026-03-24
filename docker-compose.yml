@@ -144,6 +144,10 @@ services:
     environment:
       - PORT=3006
       - NODE_ENV=development
+      - DB_URL=mongodb://ai-symptom-checker-db:27017/aisymptomcheckerdb
+    depends_on:
+      - ai-symptom-checker-db
+
     networks:
       - healthcare-network
 
