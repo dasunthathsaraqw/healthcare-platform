@@ -27,8 +27,11 @@ exports.register = async (req, res) => {
       });
     }
 
+    // Force email to lowercase for database consistency
+    const lowerCaseEmail = email.toLowerCase();
+
     // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: lowerCaseEmail });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -40,15 +43,21 @@ exports.register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // CRITICAL SECURITY FIX: Prevent users from registering as ADMIN via the API
+    let assignedRole = ROLES.PATIENT; // Default to patient
+    if (role === ROLES.DOCTOR) {
+        assignedRole = ROLES.DOCTOR;
+    }
+
     // Create new user with hashed password
     const user = new User({
       name,
-      email,
+      email: lowerCaseEmail,
       password: hashedPassword, // Store hashed password
-      role: role || ROLES.PATIENT,
+      role: assignedRole,
       phone: phone || "",
-      // If doctor, requires verification
-      isVerified: role === ROLES.DOCTOR ? false : true,
+      // If doctor, requires verification by an admin later
+      isVerified: assignedRole === ROLES.DOCTOR ? false : true,
     });
 
     console.log("💾 Saving user...");
@@ -80,8 +89,12 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Find user by email
-    const user = await User.findOne({ email });
+    if (!email || !password) {
+        return res.status(400).json({ success: false, message: "Email and password are required" });
+    }
+
+    // Find user by email (force lowercase)
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -91,7 +104,7 @@ exports.login = async (req, res) => {
 
     // Check if account is active
     if (!user.isActive) {
-      return res.status(401).json({
+      return res.status(403).json({
         success: false,
         message: "Your account has been deactivated. Please contact admin.",
       });
@@ -194,7 +207,11 @@ exports.updateProfile = async (req, res) => {
     const user = await User.findByIdAndUpdate(req.user._id, updates, {
       new: true,
       runValidators: true,
-    }).select("-password");
+    });
+
+    if(!user) {
+        return res.status(404).json({ success: false, message: "User not found" });
+    }
 
     res.json({
       success: true,

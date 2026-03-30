@@ -1,19 +1,26 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Enable API routes proxying
+  // Enable standalone output for Docker build optimization
   output: "standalone",
+  
+  // Enable API routes proxying
   async rewrites() {
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:8080/api/:path*", // Proxy to API Gateway
+        // FIXED: Use the Docker internal network name 'api-gateway' instead of 'localhost'
+        // This allows the Next.js container to talk directly to the Gateway container
+        destination: "http://api-gateway:8080/api/:path*", 
       },
     ];
   },
-  // Allow CORS
+  
+  // Allow images from localhost
   images: {
     domains: ["localhost"],
   },
+  
+  // Enable React Compiler
   reactCompiler: true,
 };
 
