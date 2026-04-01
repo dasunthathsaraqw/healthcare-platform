@@ -51,6 +51,11 @@ mongoose.connection.on("disconnected", () => {
   console.log("MongoDB disconnected");
 });
 
+const { connectRabbitMQ } = require('./src/utils/rabbitmq');
+
+// Connect to RabbitMQ
+connectRabbitMQ();
+
 // Health Check with database status
 app.get("/health", (req, res) => {
   const dbStatus =
@@ -67,6 +72,11 @@ app.get("/health", (req, res) => {
 console.log("📌 Registering routes...");
 app.use("/api/auth", authRoutes);
 console.log("✅ Auth routes registered at /api/auth");
+
+//add on 1st of april
+const patientRoutes = require('./src/routes/patientRoutes-auth');
+app.use("/api/patients", patientRoutes);
+console.log("✅ Patient routes registered at /api/patients");
 
 // Test route to verify service is working
 app.get("/test", (req, res) => {

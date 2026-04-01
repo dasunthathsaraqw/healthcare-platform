@@ -60,6 +60,16 @@ services:
     networks:
       - healthcare-network
   # Backend Services
+  
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: healthcare-rabbitmq
+    ports:
+      - "5672:5672"    # The standard AMQP port for microservices to talk to it
+      - "15672:15672"  # The Admin UI dashboard port
+    networks:
+      - healthcare-network
+  
   patient-service:
     build: ./services/patient-service
     container_name: patient-service
