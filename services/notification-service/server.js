@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const { consumeNotifications } = require('./src/utils/rabbitmq');
 
 dotenv.config();
 
@@ -51,6 +52,10 @@ app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
+// Start the RabbitMQ Consumer in the background
+consumeNotifications();
+
+// 3. START THE EXPRESS SERVER
 app.listen(PORT, () => {
   console.log(`--Notification Service running on port ${PORT}--`);
 });
