@@ -1,0 +1,640 @@
+const axios = require("axios");
+const mongoose = require("mongoose");
+const Doctor = require("../models/Doctor");
+const Availability = require("../models/Availability");
+const Prescription = require("../models/Prescription");
+
+// ─── Helper: external service URLs ───────────────────────────────────────────
+const APPOINTMENT_SERVICE_URL =
+  process.env.APPOINTMENT_SERVICE_URL || "http://appointment-service:3003";
+const PATIENT_SERVICE_URL =
+  process.env.PATIENT_SERVICE_URL || "http://patient-service:3001";
+const NOTIFICATION_SERVICE_URL =
+  process.env.NOTIFICATION_SERVICE_URL || "http://notification-service:3005";
+
+// ─── Helper: forward auth header ─────────────────────────────────────────────
+const authHeader = (req) => ({
+  Authorization: req.headers.authorization || "",
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROFILE
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/doctors/profile
+ * Get the logged-in doctor's own profile
+ */
+const getDoctorProfile = async (req, res) => {
+  try {
+    return res.status(200).json({
+      success: true,
+      doctor: req.doctor.toObject ? req.doctor.toObject() : req.doctor,
+    });
+  } catch (error) {
+    console.error("getDoctorProfile error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * PUT /api/doctors/profile
+ * Update the logged-in doctor's editable fields
+ */
+const updateDoctorProfile = async (req, res) => {
+  try {
+    const allowedFields = [
+      "name",
+      "phone",
+      "specialty",
+      "qualifications",
+      "experience",
+      "clinicAddress",
+      "bio",
+      "languages",
+      "consultationFee",
+      "profilePicture",
+    ];
+
+    const updates = {};
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    });
+
+    const updated = await Doctor.findByIdAndUpdate(
+      req.doctor._id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    return res.status(200).json({ success: true, doctor: updated });
+  } catch (error) {
+    console.error("updateDoctorProfile error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * PUT /api/doctors/change-password
+ * Change the logged-in doctor's password
+ */
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: "currentPassword and newPassword are required" });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: "New password must be at least 6 characters" });
+    }
+
+    // Fetch fresh doc with password
+    const doctor = await Doctor.findById(req.doctor._id);
+    const isMatch = await doctor.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: "Current password is incorrect" });
+    }
+
+    doctor.password = newPassword; // pre-save hook hashes it
+    await doctor.save();
+    return res.status(200).json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    console.error("changePassword error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AVAILABILITY
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/doctors/availability
+ */
+const addAvailability = async (req, res) => {
+  try {
+    const {
+      dayOfWeek,
+      startTime,
+      endTime,
+      slotDuration,
+      isRecurring,
+      specificDate,
+    } = req.body;
+
+    if (!startTime || !endTime) {
+      return res
+        .status(400)
+        .json({ success: false, message: "startTime and endTime are required" });
+    }
+
+    const slot = new Availability({
+      doctorId: req.doctor._id,
+      dayOfWeek: dayOfWeek ?? null,
+      specificDate: specificDate ? new Date(specificDate) : null,
+      startTime,
+      endTime,
+      slotDuration: slotDuration || 30,
+      isRecurring: isRecurring !== undefined ? isRecurring : true,
+    });
+
+    await slot.save();
+    return res.status(201).json({ success: true, availability: slot });
+  } catch (error) {
+    console.error("addAvailability error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET /api/doctors/availability
+ * Optional query param: ?date=YYYY-MM-DD
+ */
+const getAvailability = async (req, res) => {
+  try {
+    const query = { doctorId: req.doctor._id };
+
+    if (req.query.date) {
+      const targetDate = new Date(req.query.date);
+      const dayOfWeek = targetDate.getDay();
+      query.$or = [
+        { dayOfWeek, isRecurring: true },
+        {
+          specificDate: {
+            $gte: new Date(req.query.date),
+            $lt: new Date(
+              new Date(req.query.date).setDate(targetDate.getDate() + 1)
+            ),
+          },
+        },
+      ];
+    }
+
+    const slots = await Availability.find(query).sort({ startTime: 1 });
+    return res.status(200).json({ success: true, availability: slots });
+  } catch (error) {
+    console.error("getAvailability error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * PUT /api/doctors/availability/:id
+ */
+const updateAvailability = async (req, res) => {
+  try {
+    const slot = await Availability.findOne({
+      _id: req.params.id,
+      doctorId: req.doctor._id,
+    });
+
+    if (!slot) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Availability slot not found" });
+    }
+
+    const updatable = [
+      "dayOfWeek",
+      "specificDate",
+      "startTime",
+      "endTime",
+      "slotDuration",
+      "isRecurring",
+      "status",
+    ];
+    updatable.forEach((f) => {
+      if (req.body[f] !== undefined) slot[f] = req.body[f];
+    });
+
+    await slot.save();
+    return res.status(200).json({ success: true, availability: slot });
+  } catch (error) {
+    console.error("updateAvailability error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * DELETE /api/doctors/availability/:id
+ */
+const deleteAvailability = async (req, res) => {
+  try {
+    const slot = await Availability.findOneAndDelete({
+      _id: req.params.id,
+      doctorId: req.doctor._id,
+    });
+
+    if (!slot) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Availability slot not found" });
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, message: "Availability slot deleted" });
+  } catch (error) {
+    console.error("deleteAvailability error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APPOINTMENTS  (proxied from Appointment Service)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/doctors/appointments
+ * Query: ?status=pending|confirmed|completed|cancelled
+ */
+const getAppointments = async (req, res) => {
+  try {
+    const params = {};
+    if (req.query.status) params.status = req.query.status;
+
+    const response = await axios.get(
+      `${APPOINTMENT_SERVICE_URL}/api/appointments/doctor/${req.doctor._id}`,
+      { params, headers: authHeader(req) }
+    );
+
+    return res.status(200).json(response.data);
+  } catch (error) {
+    console.error("getAppointments error:", error.message);
+    return res.status(error.response?.status || 500).json({
+      success: false,
+      message: error.response?.data?.message || "Failed to fetch appointments",
+    });
+  }
+};
+
+/**
+ * PUT /api/doctors/appointments/:id/accept
+ */
+const acceptAppointment = async (req, res) => {
+  try {
+    const response = await axios.put(
+      `${APPOINTMENT_SERVICE_URL}/api/appointments/${req.params.id}/status`,
+      { status: "confirmed" },
+      { headers: authHeader(req) }
+    );
+
+    // Fire-and-forget notification
+    axios
+      .post(
+        `${NOTIFICATION_SERVICE_URL}/api/notifications/send`,
+        {
+          type: "appointment_confirmed",
+          appointmentId: req.params.id,
+          doctorId: req.doctor._id,
+        },
+        { headers: authHeader(req) }
+      )
+      .catch((err) =>
+        console.warn("Notification send failed (non-blocking):", err.message)
+      );
+
+    return res.status(200).json(response.data);
+  } catch (error) {
+    console.error("acceptAppointment error:", error.message);
+    return res.status(error.response?.status || 500).json({
+      success: false,
+      message: error.response?.data?.message || "Failed to accept appointment",
+    });
+  }
+};
+
+/**
+ * PUT /api/doctors/appointments/:id/reject
+ */
+const rejectAppointment = async (req, res) => {
+  try {
+    const { reason } = req.body;
+
+    const response = await axios.put(
+      `${APPOINTMENT_SERVICE_URL}/api/appointments/${req.params.id}/status`,
+      { status: "rejected", rejectionReason: reason || "" },
+      { headers: authHeader(req) }
+    );
+
+    axios
+      .post(
+        `${NOTIFICATION_SERVICE_URL}/api/notifications/send`,
+        {
+          type: "appointment_rejected",
+          appointmentId: req.params.id,
+          doctorId: req.doctor._id,
+          reason,
+        },
+        { headers: authHeader(req) }
+      )
+      .catch((err) =>
+        console.warn("Notification send failed (non-blocking):", err.message)
+      );
+
+    return res.status(200).json(response.data);
+  } catch (error) {
+    console.error("rejectAppointment error:", error.message);
+    return res.status(error.response?.status || 500).json({
+      success: false,
+      message: error.response?.data?.message || "Failed to reject appointment",
+    });
+  }
+};
+
+/**
+ * PUT /api/doctors/appointments/:id/complete
+ */
+const completeAppointment = async (req, res) => {
+  try {
+    const response = await axios.put(
+      `${APPOINTMENT_SERVICE_URL}/api/appointments/${req.params.id}/status`,
+      { status: "completed" },
+      { headers: authHeader(req) }
+    );
+
+    return res.status(200).json(response.data);
+  } catch (error) {
+    console.error("completeAppointment error:", error.message);
+    return res.status(error.response?.status || 500).json({
+      success: false,
+      message:
+        error.response?.data?.message || "Failed to complete appointment",
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRESCRIPTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/doctors/prescriptions
+ */
+const issuePrescription = async (req, res) => {
+  try {
+    const { patientId, appointmentId, diagnosis, medications, notes, followUpDate } =
+      req.body;
+
+    if (!patientId || !diagnosis) {
+      return res
+        .status(400)
+        .json({ success: false, message: "patientId and diagnosis are required" });
+    }
+
+    const prescription = new Prescription({
+      doctorId: req.doctor._id,
+      patientId,
+      appointmentId: appointmentId || null,
+      diagnosis,
+      medications: medications || [],
+      notes,
+      followUpDate: followUpDate ? new Date(followUpDate) : null,
+    });
+
+    await prescription.save();
+    return res.status(201).json({ success: true, prescription });
+  } catch (error) {
+    console.error("issuePrescription error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET /api/doctors/prescriptions
+ */
+const getPrescriptions = async (req, res) => {
+  try {
+    const prescriptions = await Prescription.find({
+      doctorId: req.doctor._id,
+    }).sort({ issuedAt: -1 });
+
+    return res.status(200).json({ success: true, prescriptions });
+  } catch (error) {
+    console.error("getPrescriptions error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATIENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/doctors/patients
+ * Unique patient list derived from prescriptions + appointments
+ */
+const getPatients = async (req, res) => {
+  try {
+    // Get unique patientIds from prescriptions this doctor issued
+    const patientIds = await Prescription.distinct("patientId", {
+      doctorId: req.doctor._id,
+    });
+
+    // Enrich with Patient Service data
+    const patientDetails = await Promise.allSettled(
+      patientIds.map((id) =>
+        axios
+          .get(`${PATIENT_SERVICE_URL}/api/patients/${id}`, {
+            headers: authHeader(req),
+          })
+          .then((r) => r.data?.patient || r.data)
+      )
+    );
+
+    const patients = patientDetails
+      .filter((r) => r.status === "fulfilled")
+      .map((r) => r.value);
+
+    return res.status(200).json({ success: true, patients });
+  } catch (error) {
+    console.error("getPatients error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET /api/doctors/patients/:patientId
+ * Full patient profile + prescription history
+ */
+const getPatientDetails = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+
+    // Call Patient Service for profile
+    const patientResponse = await axios.get(
+      `${PATIENT_SERVICE_URL}/api/patients/${patientId}`,
+      { headers: authHeader(req) }
+    );
+
+    // Get all prescriptions for this patient by this doctor
+    const prescriptions = await Prescription.find({
+      doctorId: req.doctor._id,
+      patientId,
+    }).sort({ issuedAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      patient: patientResponse.data?.patient || patientResponse.data,
+      prescriptions,
+    });
+  } catch (error) {
+    console.error("getPatientDetails error:", error.message);
+    return res.status(error.response?.status || 500).json({
+      success: false,
+      message:
+        error.response?.data?.message || "Failed to fetch patient details",
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/doctors/dashboard/stats
+ */
+const getDashboardStats = async (req, res) => {
+  try {
+    const doctorId = req.doctor._id;
+
+    // Total unique patients
+    const totalPatients = await Prescription.distinct("patientId", { doctorId });
+
+    // Total prescriptions
+    const totalPrescriptions = await Prescription.countDocuments({ doctorId });
+
+    // Fetch appointment counts from Appointment Service
+    let todayAppointments = 0;
+    let pendingAppointments = 0;
+
+    try {
+      const apptRes = await axios.get(
+        `${APPOINTMENT_SERVICE_URL}/api/appointments/doctor/${doctorId}/stats`,
+        { headers: authHeader(req) }
+      );
+      todayAppointments = apptRes.data?.todayAppointments ?? 0;
+      pendingAppointments = apptRes.data?.pendingAppointments ?? 0;
+    } catch (err) {
+      console.warn(
+        "Could not fetch appointment stats (non-critical):",
+        err.message
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      stats: {
+        totalPatients: totalPatients.length,
+        todayAppointments,
+        pendingAppointments,
+        totalPrescriptions,
+      },
+    });
+  } catch (error) {
+    console.error("getDashboardStats error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC PATIENT-FACING ENDPOINTS (no auth required)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/doctors
+ * Public search: ?name=&specialty=&date=
+ */
+const searchDoctors = async (req, res) => {
+  try {
+    const filter = { isVerified: true, isActive: true };
+
+    if (req.query.name) {
+      filter.name = { $regex: req.query.name, $options: "i" };
+    }
+    if (req.query.specialty) {
+      filter.specialty = { $regex: req.query.specialty, $options: "i" };
+    }
+
+    const doctors = await Doctor.find(filter)
+      .select("-password")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({ success: true, doctors });
+  } catch (error) {
+    console.error("searchDoctors error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET /api/doctors/:id
+ * Public doctor profile (no password)
+ */
+const getPublicDoctorProfile = async (req, res) => {
+  try {
+    const doctor = await Doctor.findById(req.params.id).select("-password");
+    if (!doctor || !doctor.isVerified) {
+      return res.status(404).json({ success: false, message: "Doctor not found" });
+    }
+    return res.status(200).json({ success: true, doctor });
+  } catch (error) {
+    console.error("getPublicDoctorProfile error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET /api/doctors/:id/availability
+ * Public availability for a specific doctor, filtered by ?date=YYYY-MM-DD
+ */
+const getPublicDoctorAvailability = async (req, res) => {
+  try {
+    const query = { doctorId: req.params.id };
+
+    if (req.query.date) {
+      const targetDate = new Date(req.query.date);
+      const dayOfWeek  = targetDate.getDay();
+      query.$or = [
+        { dayOfWeek, isRecurring: true },
+        {
+          specificDate: {
+            $gte: new Date(req.query.date),
+            $lt:  new Date(new Date(req.query.date).setDate(targetDate.getDate() + 1)),
+          },
+        },
+      ];
+    }
+
+    const slots = await Availability.find(query).sort({ startTime: 1 });
+    return res.status(200).json({ success: true, availability: slots });
+  } catch (error) {
+    console.error("getPublicDoctorAvailability error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = {
+  // Private (requires auth)
+  getDoctorProfile,
+  updateDoctorProfile,
+  changePassword,
+  addAvailability,
+  getAvailability,
+  updateAvailability,
+  deleteAvailability,
+  getAppointments,
+  acceptAppointment,
+  rejectAppointment,
+  completeAppointment,
+  issuePrescription,
+  getPrescriptions,
+  getPatients,
+  getPatientDetails,
+  getDashboardStats,
+  // Public (no auth)
+  searchDoctors,
+  getPublicDoctorProfile,
+  getPublicDoctorAvailability,
+};
