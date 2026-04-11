@@ -33,9 +33,7 @@ router.post("/login",    doctorLogin);
 // Patient-facing: search all verified doctors
 router.get("/", searchDoctors);
 
-// IMPORTANT: specific named paths BEFORE /:id wildcard
-router.get("/:id/availability", getPublicDoctorAvailability);
-router.get("/:id",              getPublicDoctorProfile);
+// IMPORTANT: The /:id wildcard routes MUST be at the end, not here.
 
 // ── Protected routes (JWT required) ─────────────────────────────────────────
 
@@ -66,5 +64,9 @@ router.get("/patients/:patientId", authenticate, getPatientDetails);
 
 // Dashboard
 router.get("/dashboard/stats", authenticate, getDashboardStats);
+
+// ── Public Wildcard routes (MUST BE LAST) ──────────────────────────────────
+router.get("/:id/availability", getPublicDoctorAvailability);
+router.get("/:id",              getPublicDoctorProfile);
 
 module.exports = router;
