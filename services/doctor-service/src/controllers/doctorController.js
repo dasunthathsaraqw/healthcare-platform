@@ -3,6 +3,10 @@ const mongoose = require("mongoose");
 const Doctor = require("../models/Doctor");
 const Availability = require("../models/Availability");
 const Prescription = require("../models/Prescription");
+const PatientMock = require("../models/PatientMock");
+const AppointmentMock = require("../models/AppointmentMock");
+
+const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true";
 
 // ─── Helper: external service URLs ───────────────────────────────────────────
 const APPOINTMENT_SERVICE_URL =
@@ -253,6 +257,20 @@ const getAppointments = async (req, res) => {
     const params = {};
     if (req.query.status) params.status = req.query.status;
 
+    if (USE_MOCK_DATA) {
+      const query = { doctorId: req.doctor._id, ...params };
+      if (req.query.date) {
+        const start = new Date(req.query.date);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 1);
+        query.dateTime = { $gte: start, $lt: end };
+      }
+      const data = await AppointmentMock.find(query)
+        .populate("patientId", "name email profilePicture")
+        .sort({ dateTime: 1 });
+      return res.status(200).json({ success: true, appointments: data });
+    }
+
     const response = await axios.get(
       `${APPOINTMENT_SERVICE_URL}/api/appointments/doctor/${req.doctor._id}`,
       { params, headers: authHeader(req) }
@@ -273,6 +291,11 @@ const getAppointments = async (req, res) => {
  */
 const acceptAppointment = async (req, res) => {
   try {
+    if (USE_MOCK_DATA) {
+      const appt = await AppointmentMock.findByIdAndUpdate(req.params.id, { status: "confirmed" }, { new: true });
+      return res.status(200).json({ success: true, appointment: appt });
+    }
+
     const response = await axios.put(
       `${APPOINTMENT_SERVICE_URL}/api/appointments/${req.params.id}/status`,
       { status: "confirmed" },
@@ -311,6 +334,11 @@ const rejectAppointment = async (req, res) => {
   try {
     const { reason } = req.body;
 
+    if (USE_MOCK_DATA) {
+      const appt = await AppointmentMock.findByIdAndUpdate(req.params.id, { status: "rejected", rejectionReason: reason || "" }, { new: true });
+      return res.status(200).json({ success: true, appointment: appt });
+    }
+
     const response = await axios.put(
       `${APPOINTMENT_SERVICE_URL}/api/appointments/${req.params.id}/status`,
       { status: "rejected", rejectionReason: reason || "" },
@@ -347,6 +375,11 @@ const rejectAppointment = async (req, res) => {
  */
 const completeAppointment = async (req, res) => {
   try {
+    if (USE_MOCK_DATA) {
+      const appt = await AppointmentMock.findByIdAndUpdate(req.params.id, { status: "completed" }, { new: true });
+      return res.status(200).json({ success: true, appointment: appt });
+    }
+
     const response = await axios.put(
       `${APPOINTMENT_SERVICE_URL}/api/appointments/${req.params.id}/status`,
       { status: "completed" },
@@ -426,6 +459,11 @@ const getPrescriptions = async (req, res) => {
  */
 const getPatients = async (req, res) => {
   try {
+    if (USE_MOCK_DATA) {
+      const patients = await PatientMock.find();
+      return res.status(200).json({ success: true, patients });
+    }
+
     // Get unique patientIds from prescriptions this doctor issued
     const patientIds = await Prescription.distinct("patientId", {
       doctorId: req.doctor._id,
@@ -461,11 +499,17 @@ const getPatientDetails = async (req, res) => {
   try {
     const { patientId } = req.params;
 
-    // Call Patient Service for profile
-    const patientResponse = await axios.get(
-      `${PATIENT_SERVICE_URL}/api/patients/${patientId}`,
-      { headers: authHeader(req) }
-    );
+    let patientData;
+    if (USE_MOCK_DATA) {
+      patientData = await PatientMock.findById(patientId);
+    } else {
+      // Call Patient Service for profile
+      const patientResponse = await axios.get(
+        `${PATIENT_SERVICE_URL}/api/patients/${patientId}`,
+        { headers: authHeader(req) }
+      );
+      patientData = patientResponse.data?.patient || patientResponse.data;
+    }
 
     // Get all prescriptions for this patient by this doctor
     const prescriptions = await Prescription.find({
@@ -475,7 +519,7 @@ const getPatientDetails = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      patient: patientResponse.data?.patient || patientResponse.data,
+      patient: patientData,
       prescriptions,
     });
   } catch (error) {
@@ -510,12 +554,23 @@ const getDashboardStats = async (req, res) => {
     let pendingAppointments = 0;
 
     try {
-      const apptRes = await axios.get(
-        `${APPOINTMENT_SERVICE_URL}/api/appointments/doctor/${doctorId}/stats`,
-        { headers: authHeader(req) }
-      );
-      todayAppointments = apptRes.data?.todayAppointments ?? 0;
-      pendingAppointments = apptRes.data?.pendingAppointments ?? 0;
+      if (USE_MOCK_DATA) {
+        const today = new Date();
+        const startOfDay = new Date(today.setHours(0,0,0,0));
+        const endOfDay = new Date(today.setHours(23,59,59,999));
+        todayAppointments = await AppointmentMock.countDocuments({ 
+          doctorId, 
+          dateTime: { $gte: startOfDay, $lte: endOfDay } 
+        });
+        pendingAppointments = await AppointmentMock.countDocuments({ doctorId, status: "pending" });
+      } else {
+        const apptRes = await axios.get(
+          `${APPOINTMENT_SERVICE_URL}/api/appointments/doctor/${doctorId}/stats`,
+          { headers: authHeader(req) }
+        );
+        todayAppointments = apptRes.data?.todayAppointments ?? 0;
+        pendingAppointments = apptRes.data?.pendingAppointments ?? 0;
+      }
     } catch (err) {
       console.warn(
         "Could not fetch appointment stats (non-critical):",
