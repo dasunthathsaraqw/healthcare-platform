@@ -9,7 +9,7 @@ const adminRoutes  = require("./src/routes/adminRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3002;
-const DB_URL = process.env.DB_URL || "mongodb://localhost:27017/doctor-service";
+const DB_URL = process.env.DB_URL || "mongodb://localhost:27017/heath-care";
 
 // ── CORS ───────────────────────────────────────────────────────────────────────
 app.use(
@@ -96,10 +96,7 @@ app.use((req, res) => {
 // ── MongoDB connection + server start ────────────────────────────────────────
 const startServer = async () => {
   try {
-    await mongoose.connect(DB_URL, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(DB_URL);
     console.log(`✅ MongoDB connected: ${DB_URL}`);
 
     app.listen(PORT, () => {
