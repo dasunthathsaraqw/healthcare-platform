@@ -18,6 +18,9 @@ exports.register = async (req, res) => {
     console.log("📝 Registration request:", req.body);
 
     const { name, email, password, role, phone } = req.body;
+    const ADMIN_BOOTSTRAP_EMAIL = (
+      process.env.ADMIN_BOOTSTRAP_EMAIL || "admin@system.com"
+    ).toLowerCase();
 
     // Validate required fields
     if (!name || !email || !password) {
@@ -43,10 +46,12 @@ exports.register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // CRITICAL SECURITY FIX: Prevent users from registering as ADMIN via the API
-    let assignedRole = ROLES.PATIENT; // Default to patient
-    if (role === ROLES.DOCTOR) {
-        assignedRole = ROLES.DOCTOR;
+    // Controlled override: bootstrap admin account by email, otherwise keep safe defaults
+    let assignedRole = ROLES.PATIENT;
+    if (lowerCaseEmail === ADMIN_BOOTSTRAP_EMAIL) {
+      assignedRole = ROLES.ADMIN;
+    } else if (role === ROLES.DOCTOR) {
+      assignedRole = ROLES.DOCTOR;
     }
 
     // Create new user with hashed password

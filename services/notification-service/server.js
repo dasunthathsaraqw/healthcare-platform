@@ -26,6 +26,8 @@ mongoose
     console.error("Notification Service: MongoDB connection error:", err),
   );
 
+  app.use("/api/notifications/logs", require("./src/routes/logRoutes"));
+
 // Health Check
 app.get("/health", (req, res) => {
   res.status(200).json({
