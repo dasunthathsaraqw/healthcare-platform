@@ -98,21 +98,25 @@ const handleError = (res, error, fallbackMessage = "Internal server error") => {
 const bookAppointment = async (req, res) => {
   try {
     const {
-      patientId,
       doctorId,
-      patientName,
       doctorName,
       specialty,
       dateTime,
       reason,
       consultationFee,
+      isForSomeoneElse,
+      bookedFor,
     } = req.body;
+
+    // Use authenticated user data if not provided in body
+    const patientId = req.body.patientId || req.user.id;
+    const patientName = req.body.patientName || req.user.name || "Patient";
 
     // Basic validation
     if (!patientId || !doctorId || !dateTime) {
       return res.status(400).json({
         success: false,
-        message: "patientId, doctorId, and dateTime are required.",
+        message: "doctorId and dateTime are required.",
       });
     }
 
@@ -145,6 +149,19 @@ const bookAppointment = async (req, res) => {
       });
     }
 
+    // ── Calculate Patient Number for the day ────────────────────────────────
+    const startOfDay = new Date(apptDateTime);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(apptDateTime);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const dailyCount = await Appointment.countDocuments({
+      doctorId,
+      dateTime: { $gte: startOfDay, $lte: endOfDay },
+      status: { $nin: ["cancelled", "rejected"] },
+    });
+    const patientNumber = dailyCount + 1;
+
     // Create appointment
     const appointment = new Appointment({
       patientId,
@@ -155,8 +172,12 @@ const bookAppointment = async (req, res) => {
       dateTime: apptDateTime,
       reason: reason || "",
       consultationFee: consultationFee || 0,
-      status: "pending",
-      meetingLink: generateMeetingLink(new Date().getTime()),
+      status: "confirmed", // Auto-confirm
+      paymentStatus: "paid", // Auto-mark as paid
+      meetingLink: generateMeetingLink(`${patientId}-${Date.now()}`),
+      isForSomeoneElse: !!isForSomeoneElse,
+      bookedFor: bookedFor || { name: "", age: null, phone: "", email: "" },
+      patientNumber,
     });
 
     await appointment.save();
@@ -172,6 +193,11 @@ const bookAppointment = async (req, res) => {
       specialty: specialty || "",
       dateTime: apptDateTime.toISOString(),
       reason: reason || "",
+      patientNumber,
+      meetingLink: appointment.meetingLink,
+      isForSomeoneElse: !!isForSomeoneElse,
+      // Priority email for notification: guest email if "booked for others", else patient email (if provided)
+      patientEmail: isForSomeoneElse ? bookedFor?.email : (req.user?.email || ""),
     }).catch((err) =>
       console.warn("Non-critical: Failed to publish APPOINTMENT_BOOKED:", err.message)
     );
@@ -473,6 +499,9 @@ const cancelAppointment = async (req, res) => {
     }
 
     appointment.status = "cancelled";
+    if (req.body.reason) {
+      appointment.cancellationReason = req.body.reason;
+    }
     await appointment.save();
 
     return res.status(200).json({

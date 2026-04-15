@@ -58,6 +58,30 @@ const appointmentSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    cancellationReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    // ── Guest Booking ────────────────────────────────────────────────────────
+    isForSomeoneElse: {
+      type: Boolean,
+      default: false,
+    },
+    bookedFor: {
+      name:  { type: String, default: "" },
+      age:   { type: Number, default: null },
+      phone: { type: String, default: "" },
+      email: { type: String, default: "" },
+    },
+
+    // ── Sequencing ────────────────────────────────────────────────────────────
+    patientNumber: {
+      type: Number,
+      default: 1,
+      index: true,
+    },
 
     // ── Video consultation ─────────────────────────────────────────────────────
     meetingLink: {

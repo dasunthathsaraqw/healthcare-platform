@@ -45,8 +45,8 @@ mongoose.connection.on("error", (err) => {
 });
 
 // ── RabbitMQ ───────────────────────────────────────────────────────────────────
-const { connectRabbitMQ } = require("./src/utils/rabbitmq");
-connectRabbitMQ();
+/*const { connectRabbitMQ } = require("./src/utils/rabbitmq");
+connectRabbitMQ();*/
 
 // ── Health Check ───────────────────────────────────────────────────────────────
 app.get("/health", (req, res) => {

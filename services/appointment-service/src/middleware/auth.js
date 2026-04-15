@@ -19,11 +19,19 @@ const authenticate = (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
     const secret = process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this";
+    const internalSecret = process.env.INTERNAL_SECRET;
+
+    // Service-to-service authentication (e.g. from payment-service)
+    if (internalSecret && token === internalSecret) {
+      req.user = { id: "system", role: "admin", name: "Internal Service" };
+      return next();
+    }
 
     let decoded;
     try {
       decoded = jwt.verify(token, secret);
     } catch (err) {
+      console.warn("❌ Auth failed:", err.message);
       if (err.name === "TokenExpiredError") {
         return res.status(401).json({
           success: false,
