@@ -17,7 +17,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.use("/api/sessions", sessionRoutes);
+app.use("/api/telemedicine", sessionRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

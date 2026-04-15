@@ -3,10 +3,14 @@ require("dotenv").config();
 const app = require("./app");
 const connectDatabase = require("./config/db");
 
-const PORT = process.env.PORT || 5004;
+const PORT = process.env.PORT;
 
 const startServer = async () => {
   try {
+    if (!PORT) {
+      throw new Error("PORT is not defined in environment variables.");
+    }
+
     await connectDatabase();
 
     app.listen(PORT, () => {

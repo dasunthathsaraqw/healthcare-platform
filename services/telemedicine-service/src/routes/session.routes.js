@@ -1,15 +1,15 @@
 const express = require("express");
 const sessionController = require("../controllers/session.controller");
+const authMiddleware = require("../middleware/auth.middleware");
 
 const router = express.Router();
 
-router.post("/", sessionController.createSession);
+router.use(authMiddleware);
+
+router.post("/sessions", sessionController.createSession);
+router.get("/sessions/:appointmentId", sessionController.getSessionByAppointmentId);
+router.patch("/sessions/:appointmentId/start", sessionController.startSession);
+router.patch("/sessions/:appointmentId/end", sessionController.endSession);
 router.get("/my-sessions", sessionController.getMySessions);
-router.get(
-  "/appointment/:appointmentId",
-  sessionController.getSessionByAppointmentId
-);
-router.patch("/appointment/:appointmentId/start", sessionController.startSession);
-router.patch("/appointment/:appointmentId/end", sessionController.endSession);
 
 module.exports = router;
