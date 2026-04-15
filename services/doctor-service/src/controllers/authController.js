@@ -113,7 +113,7 @@ const doctorLogin = async (req, res) => {
 
     const token = jwt.sign(
       { id: doctor._id, role: "doctor" },
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this",
       { expiresIn: "7d" }
     );
 
