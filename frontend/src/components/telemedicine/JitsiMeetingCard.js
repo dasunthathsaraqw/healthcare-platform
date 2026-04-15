@@ -1,7 +1,10 @@
 "use client";
 
+import JitsiConsultationMeeting from "./JitsiConsultationMeeting";
+
 export default function JitsiMeetingCard({
-  joinUrl,
+  roomId,
+  displayName,
   hasJoined,
   onJoin,
   onEnd,
@@ -13,19 +16,14 @@ export default function JitsiMeetingCard({
       <h2 className="text-lg font-semibold text-slate-900">Video Consultation</h2>
 
       <div className="mt-4 overflow-hidden rounded-xl border border-blue-100 bg-slate-950">
-        {hasJoined && joinUrl ? (
-          <iframe
-            title="Telemedicine Meeting"
-            src={joinUrl}
-            allow="camera; microphone; fullscreen; display-capture"
-            className="h-[420px] w-full md:h-[560px]"
-          />
+        {hasJoined ? (
+          <JitsiConsultationMeeting roomId={roomId} displayName={displayName} />
         ) : (
           <div className="flex h-[420px] w-full items-center justify-center p-8 text-center md:h-[560px]">
             <div>
               <p className="text-base font-medium text-white">Ready to start consultation?</p>
               <p className="mt-2 text-sm text-slate-300">
-                Click "Join Consultation" to launch the secure Jitsi meeting.
+                Click &quot;Join Consultation&quot; to launch the secure Jitsi meeting.
               </p>
             </div>
           </div>

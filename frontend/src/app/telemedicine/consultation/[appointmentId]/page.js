@@ -6,10 +6,8 @@ import axios from "axios";
 import ConsultationInfoCard from "@/components/telemedicine/ConsultationInfoCard";
 import JitsiMeetingCard from "@/components/telemedicine/JitsiMeetingCard";
 import {
-  EmptyState,
   ErrorState,
   LoadingState,
-  UnauthorizedState,
 } from "@/components/telemedicine/ConsultationStates";
 
 const TELEMEDICINE_API_BASE =
@@ -40,7 +38,6 @@ export default function TelemedicineConsultationPage() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [unauthorized, setUnauthorized] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
 
@@ -60,6 +57,7 @@ export default function TelemedicineConsultationPage() {
 
   const fetchSession = useCallback(async () => {
     if (!appointmentId) {
+      setError("Missing appointment ID in the route.");
       setLoading(false);
       return;
     }
@@ -67,7 +65,6 @@ export default function TelemedicineConsultationPage() {
     try {
       setLoading(true);
       setError("");
-      setUnauthorized(false);
 
       const response = await apiClient.get(`/telemedicine/sessions/${appointmentId}`);
       setSession(response?.data?.data || null);
@@ -75,12 +72,12 @@ export default function TelemedicineConsultationPage() {
       const status = requestError?.response?.status;
 
       if (status === 401 || status === 403) {
-        setUnauthorized(true);
+        setError("Unauthorized access to this consultation session.");
         return;
       }
 
       if (status === 404) {
-        setSession(null);
+        setError("Session not found for this appointment.");
         return;
       }
 
@@ -110,7 +107,7 @@ export default function TelemedicineConsultationPage() {
       setHasJoined(true);
     } catch (requestError) {
       if (requestError?.response?.status === 403) {
-        setUnauthorized(true);
+        setError("You are not allowed to join this consultation.");
       } else {
         setError(
           requestError?.response?.data?.message || "Failed to start the consultation."
@@ -132,7 +129,7 @@ export default function TelemedicineConsultationPage() {
       setSession(response?.data?.data || session);
     } catch (requestError) {
       if (requestError?.response?.status === 403) {
-        setUnauthorized(true);
+        setError("You are not allowed to end this consultation.");
       } else {
         setError(
           requestError?.response?.data?.message || "Failed to end the consultation."
@@ -147,8 +144,8 @@ export default function TelemedicineConsultationPage() {
     return <LoadingState />;
   }
 
-  if (unauthorized || !token) {
-    return <UnauthorizedState />;
+  if (!token) {
+    return <ErrorState message="Unauthorized. Please log in to continue." />;
   }
 
   if (error) {
@@ -156,7 +153,7 @@ export default function TelemedicineConsultationPage() {
   }
 
   if (!session) {
-    return <EmptyState />;
+    return <ErrorState message="Session data is unavailable for this appointment." />;
   }
 
   const sessionWithNames = {
@@ -182,7 +179,8 @@ export default function TelemedicineConsultationPage() {
         <section className="grid grid-cols-1 gap-5 xl:grid-cols-12">
           <div className="xl:col-span-8">
             <JitsiMeetingCard
-              joinUrl={session.joinUrl}
+              roomId={session.roomId}
+              displayName={currentUser?.name || "Healthcare User"}
               hasJoined={hasJoined || session.status === "ACTIVE" || session.status === "ENDED"}
               onJoin={handleJoin}
               onEnd={handleEnd}
