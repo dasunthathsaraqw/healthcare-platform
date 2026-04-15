@@ -122,6 +122,7 @@ function AppointmentCard({ appt, onClick }) {
 function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const [cancelStep, setCancelStep] = useState("view"); // "view" | "confirm"
   const [reason, setReason] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     if (open) {
@@ -139,8 +140,13 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const dt = appt.dateTime || appt.date;
 
   const handleJoinMeeting = () => {
-    if (appt.meetingLink) {
-      window.open(appt.meetingLink, "_blank");
+    if (appt?._id) {
+      onClose();
+      router.push(`/dashboard/telemedicine?appointmentId=${encodeURIComponent(appt._id)}`);
+      return;
+    }
+    if (appt?.meetingLink || appt?.meetingUrl) {
+      window.open(appt.meetingLink || appt.meetingUrl, "_blank");
     }
   };
 

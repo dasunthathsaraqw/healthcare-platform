@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 
 const TELEMEDICINE_API_BASE =
@@ -14,12 +14,18 @@ function getToken() {
   return localStorage.getItem("token") || "";
 }
 
-export default function TelemedicineHubCard({ title, subtitle }) {
+export default function TelemedicineHubCard({
+  title,
+  subtitle,
+  allowManualEntry = true,
+}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [appointmentId, setAppointmentId] = useState("");
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const hasAutoOpenedRef = useRef(false);
 
   const token = useMemo(() => getToken(), []);
 
@@ -42,6 +48,17 @@ export default function TelemedicineHubCard({ title, subtitle }) {
     router.push(`/telemedicine/consultation/${encodeURIComponent(cleanId)}`);
   };
 
+  useEffect(() => {
+    const selectedAppointmentId = (searchParams.get("appointmentId") || "").trim();
+    if (!selectedAppointmentId || hasAutoOpenedRef.current) {
+      return;
+    }
+
+    hasAutoOpenedRef.current = true;
+    setAppointmentId(selectedAppointmentId);
+    openConsultation(selectedAppointmentId);
+  }, [searchParams]);
+
   const loadMySessions = async () => {
     try {
       setLoading(true);
@@ -62,28 +79,30 @@ export default function TelemedicineHubCard({ title, subtitle }) {
       <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
       <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
 
-      <div className="mt-5 rounded-xl border border-blue-100 bg-slate-50 p-4">
-        <label htmlFor="appointment-id" className="block text-sm font-medium text-slate-700">
-          Enter Appointment ID
-        </label>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <input
-            id="appointment-id"
-            type="text"
-            value={appointmentId}
-            onChange={(event) => setAppointmentId(event.target.value)}
-            placeholder="e.g. APT-2026-0012"
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none ring-blue-200 transition focus:border-blue-400 focus:ring"
-          />
-          <button
-            type="button"
-            onClick={() => openConsultation(appointmentId)}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            Open Consultation
-          </button>
+      {allowManualEntry && (
+        <div className="mt-5 rounded-xl border border-blue-100 bg-slate-50 p-4">
+          <label htmlFor="appointment-id" className="block text-sm font-medium text-slate-700">
+            Enter Appointment ID
+          </label>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input
+              id="appointment-id"
+              type="text"
+              value={appointmentId}
+              onChange={(event) => setAppointmentId(event.target.value)}
+              placeholder="e.g. APT-2026-0012"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none ring-blue-200 transition focus:border-blue-400 focus:ring"
+            />
+            <button
+              type="button"
+              onClick={() => openConsultation(appointmentId)}
+              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              Open Consultation
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="mt-4">
         <button
