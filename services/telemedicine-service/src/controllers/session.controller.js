@@ -28,6 +28,38 @@ const canAddConsultationNotes = (session, userId, role) => {
   return isDoctorOfSession(session, userId, role);
 };
 
+const evaluateSessionTimeAccess = (session) => {
+  if (!session?.scheduledAt) {
+    return { allowed: true };
+  }
+
+  const scheduledTime = new Date(session.scheduledAt);
+  if (Number.isNaN(scheduledTime.getTime())) {
+    return { allowed: true };
+  }
+
+  if (session.status === "ENDED") {
+    return {
+      allowed: false,
+      statusCode: 403,
+      message: "Consultation has already ended. Session access is no longer allowed."
+    };
+  }
+
+  const accessStartTime = new Date(scheduledTime.getTime() - 15 * 60 * 1000);
+  const now = new Date();
+
+  if (now < accessStartTime) {
+    return {
+      allowed: false,
+      statusCode: 403,
+      message: `Session can be accessed only 15 minutes before the appointment. Try again after ${accessStartTime.toISOString()}.`
+    };
+  }
+
+  return { allowed: true };
+};
+
 const createSession = async (req, res, next) => {
   try {
     const { appointmentId, doctorId, patientId, scheduledAt } = req.body;
@@ -102,6 +134,14 @@ const getSessionByAppointmentId = async (req, res, next) => {
       });
     }
 
+    const sessionAccess = evaluateSessionTimeAccess(session);
+    if (!sessionAccess.allowed) {
+      return res.status(sessionAccess.statusCode).json({
+        success: false,
+        message: sessionAccess.message
+      });
+    }
+
     return res.status(200).json({
       success: true,
       data: session
@@ -137,6 +177,14 @@ const startSession = async (req, res, next) => {
       return res.status(403).json({
         success: false,
         message: "Forbidden. Only the assigned doctor can start this session."
+      });
+    }
+
+    const sessionAccess = evaluateSessionTimeAccess(existingSession);
+    if (!sessionAccess.allowed) {
+      return res.status(sessionAccess.statusCode).json({
+        success: false,
+        message: sessionAccess.message
       });
     }
 
@@ -185,6 +233,14 @@ const endSession = async (req, res, next) => {
       return res.status(403).json({
         success: false,
         message: "Forbidden. You do not have access to end this session."
+      });
+    }
+
+    const sessionAccess = evaluateSessionTimeAccess(existingSession);
+    if (!sessionAccess.allowed) {
+      return res.status(sessionAccess.statusCode).json({
+        success: false,
+        message: sessionAccess.message
       });
     }
 
