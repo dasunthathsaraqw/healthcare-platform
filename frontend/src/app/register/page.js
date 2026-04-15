@@ -112,7 +112,7 @@ export default function Register() {
                 name="name"
                 type="text"
                 required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="mt-1 appearance-none relative block w-full px-3 py-2 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:text-gray-900"
                 placeholder="John Doe"
                 value={formData.name}
                 onChange={handleChange}
@@ -131,7 +131,7 @@ export default function Register() {
                 name="email"
                 type="email"
                 required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="mt-1 appearance-none relative block w-full px-3 py-2 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:text-gray-900"
                 placeholder="john@example.com"
                 value={formData.email}
                 onChange={handleChange}
@@ -149,7 +149,7 @@ export default function Register() {
                 id="phone"
                 name="phone"
                 type="tel"
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="mt-1 appearance-none relative block w-full px-3 py-2 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:text-gray-900"
                 placeholder="+94 77 123 4567"
                 value={formData.phone}
                 onChange={handleChange}
@@ -166,16 +166,19 @@ export default function Register() {
               <select
                 id="role"
                 name="role"
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 block w-full px-3 py-2 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:text-gray-900"
                 value={formData.role}
                 onChange={handleChange}
               >
-                <option value="patient">Patient</option>
-                <option value="doctor">Doctor</option>
+                <option className="text-gray-900" value="patient">Patient</option>
+                <option className="text-gray-900" value="doctor">Doctor</option>
+                <option className="text-gray-900" value="admin">Admin</option>
               </select>
               <p className="mt-1 text-xs text-gray-500">
                 {formData.role === "doctor"
                   ? "Doctor accounts require admin verification before you can start practicing."
+                  : formData.role === "admin" 
+                  ? "Admin accounts have full oversight capabilities."
                   : "Patient accounts are activated immediately."}
               </p>
             </div>
@@ -192,7 +195,7 @@ export default function Register() {
                 name="password"
                 type="password"
                 required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className="mt-1 appearance-none relative block w-full px-3 py-2 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:text-gray-900"
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={handleChange}

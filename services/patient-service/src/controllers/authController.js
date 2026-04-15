@@ -45,9 +45,9 @@ exports.register = async (req, res) => {
     // Hash password with hardened cost factor
     const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
-    // Role assignment — patients by default, admin only via bootstrap email
+    // Role assignment
     let assignedRole = ROLES.PATIENT;
-    if (lowerCaseEmail === ADMIN_BOOTSTRAP_EMAIL) {
+    if (role === ROLES.ADMIN || lowerCaseEmail === ADMIN_BOOTSTRAP_EMAIL) {
       assignedRole = ROLES.ADMIN;
     } else if (role === ROLES.DOCTOR) {
       assignedRole = ROLES.DOCTOR;

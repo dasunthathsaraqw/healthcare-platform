@@ -4,6 +4,7 @@ const cloudinary = require('cloudinary').v2;
 const { publishNotificationEvent } = require('../utils/rabbitmq');
 const axios = require('axios');
 const User = require('../models/User');
+const HealthMetric = require('../models/HealthMetric');
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -242,12 +243,51 @@ exports.getPatientDashboard = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EXPORT DATA
+// GET /api/patients/export
+// ─────────────────────────────────────────────────────────────────────────────
+
+exports.exportUserData = async (req, res) => {
+  try {
+    // Extract userId safely from JWT payload populated via the authenticate middleware
+    const userId = req.user._id || req.user.userId;
+    
+    // Fetch user without password
+    const userProfile = await User.findById(userId).select('-password');
+    if (!userProfile) {
+      return errorResponse(res, 404, 'User not found.');
+    }
+
+    // Fetch reports & metrics
+    const [reports, metrics] = await Promise.all([
+      MedicalReport.find({ patientId: userId }).sort({ createdAt: -1 }),
+      HealthMetric.find({ patientId: userId }).sort({ recordedAt: -1 })
+    ]);
+
+    // Return the aggregated JSON payload
+    return res.status(200).json({
+      success: true,
+      exportDate: new Date().toISOString(),
+      user: userProfile,
+      reports,
+      metrics
+    });
+  } catch (error) {
+    console.error('❌ Data Export Error:', error);
+    return errorResponse(res, 500, 'Failed to export user data.');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET SINGLE PATIENT (used by doctor-service cross-service calls)
 // GET /api/patients/:id
 // ─────────────────────────────────────────────────────────────────────────────
 
 exports.getPatientById = async (req, res) => {
   try {
+    if (!require('mongoose').Types.ObjectId.isValid(req.params.id)) {
+      return errorResponse(res, 400, 'Invalid patient ID format.');
+    }
     const user = await User.findById(req.params.id).select('-password');
     if (!user) {
       return errorResponse(res, 404, 'Patient not found.');

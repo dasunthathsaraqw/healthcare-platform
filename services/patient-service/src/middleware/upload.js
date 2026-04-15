@@ -30,6 +30,7 @@ cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
+  timeout: 10000, // Important to prevent hangs when external networking fails
 });
 
 console.log(

@@ -86,7 +86,7 @@ export default function HealthMetricsPage() {
 
       setSuccess("Metric logged successfully!");
       setSystolic(""); setDiastolic(""); setWeightVal(""); setHeartRate(""); setNotes("");
-      fetchMetrics();
+      await fetchMetrics();
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
       setFormError(err.response?.data?.message || "Failed to log metric.");
@@ -173,13 +173,13 @@ export default function HealthMetricsPage() {
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Systolic</label>
                     <input type="number" placeholder="120" value={systolic}
                       onChange={(e) => setSystolic(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                      className="w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-all duration-200 border bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 focus:border-blue-500" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Diastolic</label>
                     <input type="number" placeholder="80" value={diastolic}
                       onChange={(e) => setDiastolic(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                      className="w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-all duration-200 border bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 focus:border-blue-500" />
                   </div>
                 </div>
               )}
@@ -242,11 +242,11 @@ export default function HealthMetricsPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-gray-900">Trend Overview</h2>
               <select value={days} onChange={(e) => setDays(Number(e.target.value))}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200">
-                <option value={7}>Last 7 days</option>
-                <option value={14}>Last 14 days</option>
-                <option value={30}>Last 30 days</option>
-                <option value={90}>Last 90 days</option>
+                className="px-3 py-1.5 rounded-lg text-xs outline-none transition-all duration-200 border bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 focus:border-blue-500">
+                <option className="bg-white text-gray-900" value={7}>Last 7 days</option>
+                <option className="bg-white text-gray-900" value={14}>Last 14 days</option>
+                <option className="bg-white text-gray-900" value={30}>Last 30 days</option>
+                <option className="bg-white text-gray-900" value={90}>Last 90 days</option>
               </select>
             </div>
             {/* Visual bar chart placeholder */}

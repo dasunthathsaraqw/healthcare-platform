@@ -1,5 +1,6 @@
 // src/controllers/preferencesController.js
 const NotificationPreference = require('../models/NotificationPreference');
+const mongoose = require('mongoose');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET PREFERENCES
@@ -8,6 +9,10 @@ const NotificationPreference = require('../models/NotificationPreference');
 
 exports.getPreferences = async (req, res) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ success: false, message: 'Database connection unavailable.' });
+    }
+
     const recipientId = req.user?.userId || req.query.recipientId;
     if (!recipientId) {
       return res.status(400).json({ success: false, message: 'recipientId is required.' });

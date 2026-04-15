@@ -45,7 +45,7 @@ const validateRegister = [
 
   body("role")
     .optional()
-    .isIn(["patient", "doctor"]).withMessage("Role must be either 'patient' or 'doctor'"),
+    .isIn(["patient", "doctor", "admin"]).withMessage("Role must be 'patient', 'doctor', or 'admin'"),
 
   body("phone")
     .optional({ checkFalsy: true })

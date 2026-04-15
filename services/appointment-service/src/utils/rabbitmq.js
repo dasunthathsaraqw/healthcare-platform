@@ -15,7 +15,13 @@ const connectRabbitMQ = async () => {
     channel = await connection.createChannel();
 
     // Use the same queue name the notification-service is consuming from
-    await channel.assertQueue("notification_queue", { durable: true });
+    await channel.assertQueue("notification_queue", { 
+      durable: true,
+      arguments: {
+        'x-dead-letter-exchange': 'notification_dlx',
+        'x-dead-letter-routing-key': 'notification_dead_letter_queue',
+      }
+    });
 
     console.log("✅ Appointment Service: Connected to RabbitMQ");
 
