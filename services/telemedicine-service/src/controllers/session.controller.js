@@ -1,6 +1,33 @@
 const sessionService = require("../services/session.service");
 const roomService = require("../services/room.service");
 
+const getAuthUserContext = (req) => {
+  const userId = req.user?.id || req.user?.userId || req.user?._id;
+  const role = req.user?.role ? String(req.user.role).toLowerCase() : "";
+
+  return { userId: userId ? String(userId) : "", role };
+};
+
+const isSessionParticipant = (session, userId) => {
+  if (!userId) {
+    return false;
+  }
+
+  return (
+    String(session.doctorId) === String(userId) ||
+    String(session.patientId) === String(userId)
+  );
+};
+
+const isDoctorOfSession = (session, userId, role) => {
+  return role === "doctor" && String(session.doctorId) === String(userId);
+};
+
+// Keep this helper reusable for a future consultation-notes endpoint.
+const canAddConsultationNotes = (session, userId, role) => {
+  return isDoctorOfSession(session, userId, role);
+};
+
 const createSession = async (req, res, next) => {
   try {
     const { appointmentId, doctorId, patientId, scheduledAt } = req.body;
@@ -48,6 +75,15 @@ const createSession = async (req, res, next) => {
 
 const getSessionByAppointmentId = async (req, res, next) => {
   try {
+    const { userId } = getAuthUserContext(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized. User context is required."
+      });
+    }
+
     const session = await sessionService.getSessionByAppointmentId(
       req.params.appointmentId
     );
@@ -56,6 +92,13 @@ const getSessionByAppointmentId = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: "Session not found for the given appointmentId."
+      });
+    }
+
+    if (!isSessionParticipant(session, userId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden. You do not have access to this session."
       });
     }
 
@@ -70,6 +113,33 @@ const getSessionByAppointmentId = async (req, res, next) => {
 
 const startSession = async (req, res, next) => {
   try {
+    const { userId, role } = getAuthUserContext(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized. User context is required."
+      });
+    }
+
+    const existingSession = await sessionService.getSessionByAppointmentId(
+      req.params.appointmentId
+    );
+
+    if (!existingSession) {
+      return res.status(404).json({
+        success: false,
+        message: "Session not found for the given appointmentId."
+      });
+    }
+
+    if (!isDoctorOfSession(existingSession, userId, role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden. Only the assigned doctor can start this session."
+      });
+    }
+
     const session = await sessionService.startSession(req.params.appointmentId);
 
     if (!session) {
@@ -91,6 +161,33 @@ const startSession = async (req, res, next) => {
 
 const endSession = async (req, res, next) => {
   try {
+    const { userId } = getAuthUserContext(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized. User context is required."
+      });
+    }
+
+    const existingSession = await sessionService.getSessionByAppointmentId(
+      req.params.appointmentId
+    );
+
+    if (!existingSession) {
+      return res.status(404).json({
+        success: false,
+        message: "Session not found for the given appointmentId."
+      });
+    }
+
+    if (!isSessionParticipant(existingSession, userId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden. You do not have access to end this session."
+      });
+    }
+
     const session = await sessionService.endSession(req.params.appointmentId);
 
     if (!session) {
@@ -112,8 +209,7 @@ const endSession = async (req, res, next) => {
 
 const getMySessions = async (req, res, next) => {
   try {
-    const userId = req.user?.id || req.user?.userId;
-    const role = req.user?.role ? String(req.user.role).toLowerCase() : "";
+    const { userId, role } = getAuthUserContext(req);
 
     if (!userId) {
       return res.status(401).json({
@@ -138,5 +234,6 @@ module.exports = {
   getSessionByAppointmentId,
   startSession,
   endSession,
-  getMySessions
+  getMySessions,
+  canAddConsultationNotes
 };
