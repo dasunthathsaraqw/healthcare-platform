@@ -5,6 +5,10 @@ const patientController = require('../controllers/patientController');
 const { authenticate, authorize, ROLES } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const adminController = require('../controllers/adminController');
+const {
+  validateMedicalHistory,
+  handleValidationErrors,
+} = require('../middleware/validate');
 
 // Apply authentication middleware to all routes below this line
 router.use(authenticate);
@@ -33,15 +37,23 @@ router.delete(
 
 // Medical History & Dashboard Routes
 router.put(
-  '/history', 
-  authorize(ROLES.PATIENT), 
+  '/history',
+  authorize(ROLES.PATIENT),
+  validateMedicalHistory,
+  handleValidationErrors,
   patientController.updateMedicalHistory
 );
 
 router.get(
-  '/dashboard', 
-  authorize(ROLES.PATIENT), 
+  '/dashboard',
+  authorize(ROLES.PATIENT),
   patientController.getPatientDashboard
+);
+
+// Cross-service: Doctor service calls this to get patient profile
+router.get(
+  '/:id',
+  patientController.getPatientById
 );
 
 // ==========================================

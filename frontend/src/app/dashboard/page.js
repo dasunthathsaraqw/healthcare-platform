@@ -235,7 +235,7 @@ export default function PatientDashboard() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50/50 to-blue-50/20">
 
       {/* ── Hero header ───────────────────────────────────────────── */}
       <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-cyan-600 px-4 sm:px-6 pt-10 pb-28 relative overflow-hidden">
@@ -369,10 +369,10 @@ export default function PatientDashboard() {
           <h2 className="text-sm font-bold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Find a Doctor",    href: "/doctors",        emoji: "🔍", from: "from-blue-50",   to: "to-blue-100",   border: "border-blue-200",   hover: "hover:border-blue-300"   },
-              { label: "My Prescriptions", href: "/prescriptions",  emoji: "💊", from: "from-green-50",  to: "to-green-100",  border: "border-green-200",  hover: "hover:border-green-300"  },
-              { label: "Medical History",  href: "/profile",        emoji: "📋", from: "from-purple-50", to: "to-purple-100", border: "border-purple-200", hover: "hover:border-purple-300" },
-              { label: "Account Settings", href: "/profile",        emoji: "⚙️", from: "from-gray-50",   to: "to-gray-100",   border: "border-gray-200",   hover: "hover:border-gray-300"   },
+              { label: "Find a Doctor",    href: "/doctors",            emoji: "🔍", from: "from-blue-50",   to: "to-blue-100",   border: "border-blue-200",   hover: "hover:border-blue-300"   },
+              { label: "Medical Vault",    href: "/dashboard/reports",   emoji: "📋", from: "from-green-50",  to: "to-green-100",  border: "border-green-200",  hover: "hover:border-green-300"  },
+              { label: "My Profile",       href: "/dashboard/profile",   emoji: "👤", from: "from-purple-50", to: "to-purple-100", border: "border-purple-200", hover: "hover:border-purple-300" },
+              { label: "Account Settings", href: "/dashboard/profile",   emoji: "⚙️", from: "from-gray-50",   to: "to-gray-100",   border: "border-gray-200",   hover: "hover:border-gray-300"   },
             ].map(({ label, href, emoji, from, to, border, hover }) => (
               <Link key={label} href={href}
                 className={`flex flex-col items-center justify-center gap-2.5 py-5 rounded-2xl
@@ -384,32 +384,6 @@ export default function PatientDashboard() {
             ))}
           </div>
         </div>
-
-        {/* ── Profile mini-card ────────────────────────────────── */}
-        {user && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-base shrink-0">
-              {getInitials(user.name || user.email)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-gray-900 truncate">{user.name || "Patient"}</p>
-              <p className="text-xs text-gray-500 truncate">{user.email || "—"}</p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Link href="/profile"
-                className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
-                Edit Profile
-              </Link>
-              <button onClick={() => {
-                localStorage.removeItem("token");
-                localStorage.removeItem("user");
-                router.push("/login");
-              }} className="px-3 py-2 rounded-xl border border-red-200 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors">
-                Logout
-              </button>
-            </div>
-          </div>
-        )}
 
       </div>
     </div>

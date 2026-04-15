@@ -108,13 +108,16 @@ services:
     environment:
       - PORT=3003
       - DB_URL=mongodb://appointment-db:27017/appointmentdb
+      - JWT_SECRET=your-super-secret-jwt-key-change-this
       - PATIENT_SERVICE_URL=http://patient-service:3001
       - DOCTOR_SERVICE_URL=http://doctor-service:3002
+      - RABBITMQ_URL=amqp://rabbitmq:5672
       - NODE_ENV=development
     depends_on:
       - appointment-db
       - patient-service
       - doctor-service
+      - rabbitmq
     networks:
       - healthcare-network
 

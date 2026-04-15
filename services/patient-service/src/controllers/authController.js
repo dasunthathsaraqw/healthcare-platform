@@ -3,50 +3,49 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { ROLES } = require("../constants/roles");
 
-// Generate JWT token
-const generateToken = (userId, userRole) => {
-  return jwt.sign(
-    { userId: userId.toString(), role: userRole }, // Include role in token
-    process.env.JWT_SECRET || "your-secret-key",
-    { expiresIn: "7d" },
-  );
-};
+// ─── Constants ────────────────────────────────────────────────────────────────
+const BCRYPT_SALT_ROUNDS = 12; // NIST-recommended minimum for 2024
 
-// Register new user
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const generateToken = (userId, userRole) =>
+  jwt.sign(
+    { userId: userId.toString(), role: userRole },
+    process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this",
+    { expiresIn: "7d" }
+  );
+
+/**
+ * Standard error response factory.
+ * Keeps all error shapes consistent for the frontend.
+ */
+const errorResponse = (res, statusCode, message, extra = {}) =>
+  res.status(statusCode).json({ success: false, code: statusCode, message, ...extra });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REGISTER
+// POST /api/auth/register
+// ─────────────────────────────────────────────────────────────────────────────
+
 exports.register = async (req, res) => {
   try {
-    console.log("📝 Registration request:", req.body);
-
     const { name, email, password, role, phone } = req.body;
     const ADMIN_BOOTSTRAP_EMAIL = (
       process.env.ADMIN_BOOTSTRAP_EMAIL || "admin@system.com"
     ).toLowerCase();
 
-    // Validate required fields
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Name, email and password are required",
-      });
-    }
-
-    // Force email to lowercase for database consistency
     const lowerCaseEmail = email.toLowerCase();
 
-    // Check if user already exists
+    // Duplicate check
     const existingUser = await User.findOne({ email: lowerCaseEmail });
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "User with this email already exists",
-      });
+      return errorResponse(res, 409, "An account with this email already exists.");
     }
 
-    // Hash the password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    // Hash password with hardened cost factor
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
-    // Controlled override: bootstrap admin account by email, otherwise keep safe defaults
+    // Role assignment — patients by default, admin only via bootstrap email
     let assignedRole = ROLES.PATIENT;
     if (lowerCaseEmail === ADMIN_BOOTSTRAP_EMAIL) {
       assignedRole = ROLES.ADMIN;
@@ -54,150 +53,137 @@ exports.register = async (req, res) => {
       assignedRole = ROLES.DOCTOR;
     }
 
-    // Create new user with hashed password
     const user = new User({
-      name,
+      name: name.trim(),
       email: lowerCaseEmail,
-      password: hashedPassword, // Store hashed password
+      password: hashedPassword,
       role: assignedRole,
-      phone: phone || "",
-      // If doctor, requires verification by an admin later
+      phone: phone?.trim() || "",
       isVerified: assignedRole === ROLES.DOCTOR ? false : true,
     });
 
-    console.log("💾 Saving user...");
     await user.save();
-    console.log("✅ User saved successfully");
+    console.log(`✅ New ${assignedRole} registered: ${lowerCaseEmail}`);
 
-    // Generate token
     const token = generateToken(user._id, user.role);
 
-    // Return response
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: "User registered successfully",
+      message: "Account created successfully. Welcome to Smart Healthcare!",
       token,
       user: user.getPublicProfile(),
     });
   } catch (error) {
+    // Mongoose duplicate key race condition (concurrent registrations)
+    if (error.code === 11000) {
+      return errorResponse(res, 409, "An account with this email already exists.");
+    }
     console.error("❌ Registration error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Registration failed",
-      error: error.message,
-    });
+    return errorResponse(res, 500, "Registration failed. Please try again.");
   }
 };
 
-// Login user
+// ─────────────────────────────────────────────────────────────────────────────
+// LOGIN
+// POST /api/auth/login
+// Rate-limited at the route level (see authRoutes.js)
+// ─────────────────────────────────────────────────────────────────────────────
+
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-        return res.status(400).json({ success: false, message: "Email and password are required" });
-    }
-
-    // Find user by email (force lowercase)
+    // Find user — same vague error message for both "not found" and "wrong password"
+    // to prevent user enumeration attacks
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+      return errorResponse(res, 401, "Invalid email or password.");
     }
 
-    // Check if account is active
     if (!user.isActive) {
-      return res.status(403).json({
-        success: false,
-        message: "Your account has been deactivated. Please contact admin.",
-      });
+      return errorResponse(
+        res, 403,
+        "Your account has been deactivated. Please contact support."
+      );
     }
 
-    // Check password
+    // Constant-time password comparison (bcrypt prevents timing attacks)
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+      return errorResponse(res, 401, "Invalid email or password.");
     }
 
-    // Generate token
     const token = generateToken(user._id, user.role);
+    console.log(`✅ Login successful: ${user.email} [${user.role}]`);
 
-    // Return response
-    res.json({
+    return res.status(200).json({
       success: true,
-      message: "Login successful",
+      message: "Login successful.",
       token,
       user: user.getPublicProfile(),
     });
   } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Login failed",
-      error: error.message,
-    });
+    console.error("❌ Login error:", error);
+    return errorResponse(res, 500, "Login failed. Please try again.");
   }
 };
 
-// Get current user profile
+// ─────────────────────────────────────────────────────────────────────────────
+// GET CURRENT USER
+// GET /api/auth/me
+// ─────────────────────────────────────────────────────────────────────────────
+
 exports.getCurrentUser = async (req, res) => {
   try {
-    res.json({
+    return res.status(200).json({
       success: true,
       user: req.user.getPublicProfile(),
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to get user profile",
-      error: error.message,
-    });
+    console.error("❌ getCurrentUser error:", error);
+    return errorResponse(res, 500, "Failed to retrieve user profile.");
   }
 };
 
-// Change password
+// ─────────────────────────────────────────────────────────────────────────────
+// CHANGE PASSWORD
+// PUT /api/auth/change-password
+// ─────────────────────────────────────────────────────────────────────────────
+
 exports.changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    const user = req.user;
 
-    // Verify current password
-    const isValidPassword = await user.comparePassword(currentPassword);
-    if (!isValidPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Current password is incorrect",
-      });
+    // Fetch fresh document (req.user may not have the hashed password field)
+    const freshUser = await User.findById(req.user._id);
+    if (!freshUser) {
+      return errorResponse(res, 404, "User account not found.");
     }
 
-    // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    const isValidPassword = await freshUser.comparePassword(currentPassword);
+    if (!isValidPassword) {
+      return errorResponse(res, 400, "Current password is incorrect.");
+    }
 
-    // Update password
-    user.password = hashedPassword;
-    await user.save();
+    // Hash and save
+    freshUser.password = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+    await freshUser.save();
 
-    res.json({
+    return res.status(200).json({
       success: true,
-      message: "Password changed successfully",
+      message: "Password changed successfully.",
     });
   } catch (error) {
-    console.error("Change password error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to change password",
-      error: error.message,
-    });
+    console.error("❌ changePassword error:", error);
+    return errorResponse(res, 500, "Failed to change password. Please try again.");
   }
 };
 
-// Update profile
+// ─────────────────────────────────────────────────────────────────────────────
+// UPDATE PROFILE
+// PUT /api/auth/profile
+// ─────────────────────────────────────────────────────────────────────────────
+
 exports.updateProfile = async (req, res) => {
   try {
     const allowedUpdates = ["name", "phone", "address", "dateOfBirth"];
@@ -205,30 +191,40 @@ exports.updateProfile = async (req, res) => {
 
     allowedUpdates.forEach((field) => {
       if (req.body[field] !== undefined) {
-        updates[field] = req.body[field];
+        // Trim string values to prevent whitespace-only storage
+        updates[field] =
+          typeof req.body[field] === "string"
+            ? req.body[field].trim()
+            : req.body[field];
       }
     });
 
-    const user = await User.findByIdAndUpdate(req.user._id, updates, {
-      new: true,
-      runValidators: true,
-    });
-
-    if(!user) {
-        return res.status(404).json({ success: false, message: "User not found" });
+    if (Object.keys(updates).length === 0) {
+      return errorResponse(res, 400, "No valid fields provided to update.");
     }
 
-    res.json({
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedUser) {
+      return errorResponse(res, 404, "User account not found.");
+    }
+
+    return res.status(200).json({
       success: true,
-      message: "Profile updated successfully",
-      user: user.getPublicProfile(),
+      message: "Profile updated successfully.",
+      user: updatedUser.getPublicProfile(),
     });
   } catch (error) {
-    console.error("Update profile error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to update profile",
-      error: error.message,
-    });
+    console.error("❌ updateProfile error:", error);
+    // Mongoose validation errors (e.g., minlength)
+    if (error.name === "ValidationError") {
+      const msg = Object.values(error.errors)[0]?.message || "Validation failed";
+      return errorResponse(res, 400, msg);
+    }
+    return errorResponse(res, 500, "Failed to update profile. Please try again.");
   }
 };
