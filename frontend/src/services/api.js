@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const rawApiBaseUrl =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+  process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_PATIENT_API_URL || "http://localhost:8080/api";
 
 // Normalize trailing slashes so route joins are consistent.
 const API_BASE_URL = rawApiBaseUrl.replace(/\/+$/, "");

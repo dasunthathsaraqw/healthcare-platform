@@ -46,10 +46,10 @@ mongoose.connection.on("disconnected", () => {
   console.log("MongoDB disconnected");
 });
 
-const { connectRabbitMQ } = require('./src/utils/rabbitmq');
+// const { connectRabbitMQ } = require('./src/utils/rabbitmq');
 
-// Connect to RabbitMQ
-connectRabbitMQ();
+// // Connect to RabbitMQ
+// connectRabbitMQ();
 
 // Health Check with database status
 app.get("/health", (req, res) => {

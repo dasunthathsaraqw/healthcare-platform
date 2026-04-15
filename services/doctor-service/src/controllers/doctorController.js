@@ -17,6 +17,19 @@ const authHeader = (req) => ({
   Authorization: req.headers.authorization || "",
 });
 
+// Helper function to calculate total slots from time range and duration
+const calculateTotalSlots = (startTime, endTime, slotDuration) => {
+  const startMins = timeToMinutes(startTime);
+  const endMins = timeToMinutes(endTime);
+  const durationMins = endMins - startMins;
+  return Math.floor(durationMins / slotDuration);
+};
+
+const timeToMinutes = (timeStr) => {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PROFILE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,12 +141,16 @@ const addAvailability = async (req, res) => {
         .json({ success: false, message: "startTime and endTime are required" });
     }
 
+    const totalSlots = calculateTotalSlots(startTime, endTime, slotDuration || 30);
+
     const slot = new Availability({
       doctorId: req.doctor._id,
       dayOfWeek: dayOfWeek ?? null,
       specificDate: specificDate ? new Date(specificDate) : null,
       startTime,
       endTime,
+      totalSlots,
+      bookedSlots: 0,
       slotDuration: slotDuration || 30,
       isRecurring: isRecurring !== undefined ? isRecurring : true,
     });
@@ -206,6 +223,12 @@ const updateAvailability = async (req, res) => {
     updatable.forEach((f) => {
       if (req.body[f] !== undefined) slot[f] = req.body[f];
     });
+
+    if (req.body.startTime !== undefined ||
+      req.body.endTime !== undefined ||
+      req.body.slotDuration !== undefined) {
+      slot.totalSlots = calculateTotalSlots(slot.startTime, slot.endTime, slot.slotDuration);
+    }
 
     await slot.save();
     return res.status(200).json({ success: true, availability: slot });
@@ -595,13 +618,13 @@ const getPublicDoctorAvailability = async (req, res) => {
 
     if (req.query.date) {
       const targetDate = new Date(req.query.date);
-      const dayOfWeek  = targetDate.getDay();
+      const dayOfWeek = targetDate.getDay();
       query.$or = [
         { dayOfWeek, isRecurring: true },
         {
           specificDate: {
             $gte: new Date(req.query.date),
-            $lt:  new Date(new Date(req.query.date).setDate(targetDate.getDate() + 1)),
+            $lt: new Date(new Date(req.query.date).setDate(targetDate.getDate() + 1)),
           },
         },
       ];
