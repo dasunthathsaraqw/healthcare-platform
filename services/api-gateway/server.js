@@ -33,6 +33,8 @@ const services = {
   notification:
     process.env.NOTIFICATION_SERVICE || "http://notification-service:3005",
   ai: process.env.AI_SYMPTOM_CHECKER || "http://ai-symptom-checker:3006",
+  // Admin routes are served by the doctor-service (it owns doctor verification)
+  admin: process.env.ADMIN_SERVICE || process.env.DOCTOR_SERVICE || "http://doctor-service:3002",
 };
 
 // --- Reusable Proxy Function to keep code clean ---
@@ -106,6 +108,9 @@ app.use(
   "/api/symptom-checker",
   handleProxy(services.ai, "/api/symptom-checker"),
 );
+
+// Admin routes (doctor verification etc.) — proxied to doctor-service admin endpoints
+app.use("/api/admin", handleProxy(services.admin, "/api/admin"));
 
 // ================= UTILITY ROUTES =================
 

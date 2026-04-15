@@ -22,12 +22,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`\n📝 ${req.method} ${req.url}`);
-  console.log("📦 Body:", req.body);
-  next();
-});
+
 
 // MongoDB Connection - FIXED: Remove deprecated options
 const dbUrl = process.env.DB_URL || "mongodb://patient-db:27017/patientdb";
@@ -68,31 +63,18 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Routes
-console.log("📌 Registering routes...");
+// ── Routes ─────────────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
-console.log("✅ Auth routes registered at /api/auth");
 
-//add on 1st of april
 const patientRoutes = require('./src/routes/patientRoutes-auth');
 app.use("/api/patients", patientRoutes);
-console.log("✅ Patient routes registered at /api/patients");
 
-// Test route to verify service is working
-app.get("/test", (req, res) => {
-  res.json({
-    message: "Test endpoint working!",
-    timestamp: new Date().toISOString(),
-  });
-});
+const metricsRoutes = require('./src/routes/metricsRoutes');
+app.use("/api/patients", metricsRoutes);
 
-// Simple test POST endpoint
-app.post("/test-post", (req, res) => {
-  console.log("Test POST received:", req.body);
-  res.json({ message: "Test POST working!", received: req.body });
-});
 
-// Error Handler - Handle aborted requests gracefully
+
+// ── Global Error Handler ───────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   // Check if it's an aborted request
   if (err.type === "request.aborted" || err.message === "request aborted") {
@@ -112,7 +94,7 @@ app.use((err, req, res, next) => {
   }
 });
 
-// 404 Handler
+// ── 404 Handler ────────────────────────────────────────────────────────────────
 app.use((req, res) => {
   console.log(`❌ 404 Not Found: ${req.method} ${req.url}`);
   if (!res.headersSent) {
@@ -122,7 +104,4 @@ app.use((req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Patient Service running on port ${PORT}`);
-  console.log(`   Health: http://localhost:${PORT}/health`);
-  console.log(`   Test: http://localhost:${PORT}/test`);
-  console.log(`   Auth: http://localhost:${PORT}/api/auth`);
 });

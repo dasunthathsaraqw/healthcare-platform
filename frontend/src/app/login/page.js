@@ -31,9 +31,10 @@ export default function Login() {
 
     if (result.success) {
       // Redirect based on role
-      if (result.user.role === "admin") {
-        router.push("/admin/dashboard");
-      } else if (result.user.role === "doctor") {
+      const role = result.user.role;
+      if (role === "admin") {
+        router.push("/dashboard/admin");
+      } else if (role === "doctor") {
         router.push("/doctor/dashboard");
       } else {
         router.push("/dashboard");

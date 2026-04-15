@@ -1,54 +1,118 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const dotenv = require("dotenv");
+const morgan = require("morgan");
+require("dotenv").config();
 
-dotenv.config();
+const doctorRoutes = require("./src/routes/doctorRoutes");
+const adminRoutes  = require("./src/routes/adminRoutes");
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3002;
+const DB_URL = process.env.DB_URL || "mongodb://localhost:27017/heath-care";
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// ── CORS ───────────────────────────────────────────────────────────────────────
+app.use(
+  cors({
+    origin: [
+      process.env.FRONTEND_URL || "http://localhost:3000",
+      "http://api-gateway:8080",
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+// ── Middleware ─────────────────────────────────────────────────────────────────
+app.use(morgan("dev"));
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// MongoDB Connection
-mongoose
-  .connect(process.env.DB_URL)
-  .then(() =>
-    console.log("--Doctor Service: Connected to Doctor Service MongoDB--"),
-  )
-  .catch((err) =>
-    console.error("Doctor Service: MongoDB connection error:", err),
-  );
+// ── Routes ─────────────────────────────────────────────────────────────────────
+app.use("/api/doctors", doctorRoutes);
+app.use("/api/admin",   adminRoutes);
 
-// Health Check
+// ── Health check ───────────────────────────────────────────────────────────────
 app.get("/health", (req, res) => {
-  res.status(200).json({
+  res.json({
     status: "OK",
     service: "doctor-service",
-    timestamp: new Date().toISOString(),
+    timestamp: new Date(),
+    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
   });
 });
 
-// Routes
-app.use("/api/doctors", require("./src/routes/doctorRouter-auth"));
+// ── Root ───────────────────────────────────────────────────────────────────────
+app.get("/", (req, res) => {
+  res.json({
+    name: "Doctor Service",
+    version: "1.0.0",
+    endpoints: [
+      "POST   /api/doctors/register",
+      "POST   /api/doctors/login",
+      "GET    /api/doctors                 (public - search)",
+      "GET    /api/doctors/:id             (public - profile)",
+      "GET    /api/doctors/:id/availability (public - slots)",
+      "GET    /api/doctors/profile",
+      "PUT    /api/doctors/profile",
+      "PUT    /api/doctors/change-password",
+      "GET    /api/doctors/availability",
+      "POST   /api/doctors/availability",
+      "PUT    /api/doctors/availability/:id",
+      "DELETE /api/doctors/availability/:id",
+      "GET    /api/doctors/appointments",
+      "PUT    /api/doctors/appointments/:id/accept",
+      "PUT    /api/doctors/appointments/:id/reject",
+      "PUT    /api/doctors/appointments/:id/complete",
+      "GET    /api/doctors/prescriptions",
+      "POST   /api/doctors/prescriptions",
+      "GET    /api/doctors/patients",
+      "GET    /api/doctors/patients/:patientId",
+      "GET    /api/doctors/dashboard/stats",
+      "GET    /api/admin/doctors/pending",
+      "GET    /api/admin/doctors/verified",
+      "GET    /api/admin/doctors",
+      "PUT    /api/admin/doctors/:id/verify",
+      "PUT    /api/admin/doctors/:id/reject",
+    ],
+  });
+});
 
-// Error Handler
+// ── Global error handler ───────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    error: "Something went wrong!",
-    message: err.message,
+  console.error("Unhandled error:", err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
   });
 });
 
-// 404 Handler
+// ── 404 handler ────────────────────────────────────────────────────────────────
 app.use((req, res) => {
-  res.status(404).json({ error: "Route not found" });
+  res.status(404).json({ success: false, message: "Route not found" });
 });
 
-app.listen(PORT, () => {
-  console.log(`--Doctor Service running on port ${PORT}--`);
+// ── MongoDB connection + server start ────────────────────────────────────────
+const startServer = async () => {
+  try {
+    await mongoose.connect(DB_URL);
+    console.log(`✅ MongoDB connected: ${DB_URL}`);
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Doctor Service running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("❌ Failed to connect to MongoDB:", err.message);
+    process.exit(1);
+  }
+};
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  await mongoose.connection.close();
+  console.log("MongoDB connection closed.");
+  process.exit(0);
 });
+
+startServer();

@@ -22,8 +22,8 @@ export const NAV_ITEMS = {
     { name: "Dashboard", href: "/dashboard", icon: "🏠" },
     { name: "Find Doctors", href: "/doctors", icon: "👨‍⚕️" },
     { name: "My Appointments", href: "/appointments", icon: "📅" },
-    { name: "Medical Reports", href: "/reports", icon: "📋" },
-    { name: "Profile", href: "/profile", icon: "👤" },
+    { name: "Medical Reports", href: "/dashboard/reports", icon: "📋" },
+    { name: "Profile", href: "/dashboard/profile", icon: "👤" },
   ],
   [USER_ROLES.DOCTOR]: [
     { name: "Dashboard", href: "/doctor/dashboard", icon: "🏠" },
