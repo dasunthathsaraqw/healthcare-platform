@@ -1,6 +1,7 @@
 // src/controllers/patientController.js
 const MedicalReport = require('../models/MedicalReport');
-const cloudinary = require('cloudinary').v2;
+const { Readable } = require('stream');
+const { cloudinary } = require('../middleware/upload');
 const { publishNotificationEvent } = require('../utils/rabbitmq');
 const axios = require('axios');
 const User = require('../models/User');
@@ -20,6 +21,8 @@ const errorResponse = (res, statusCode, message) =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 exports.uploadMedicalReport = async (req, res) => {
+  let uploadedPublicId = null;
+
   try {
     if (!req.file) {
       return errorResponse(res, 400, 'Please attach a file to upload.');
@@ -28,22 +31,52 @@ exports.uploadMedicalReport = async (req, res) => {
     const { title, documentType } = req.body;
 
     if (!title || title.trim().length === 0) {
-      // Clean up the already-uploaded Cloudinary asset if validation fails
-      await cloudinary.uploader.destroy(req.file.filename).catch(() => {});
       return errorResponse(res, 400, 'Please provide a title for this report.');
     }
 
     if (title.trim().length > 200) {
-      await cloudinary.uploader.destroy(req.file.filename).catch(() => {});
       return errorResponse(res, 400, 'Report title cannot exceed 200 characters.');
     }
+
+    if (!req.file.buffer || !Buffer.isBuffer(req.file.buffer)) {
+      return errorResponse(res, 400, 'Uploaded file is invalid or empty.');
+    }
+
+    let uploadedAsset;
+    try {
+      uploadedAsset = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'healthcare_patient_reports',
+            resource_type: 'auto',
+          },
+          (error, result) => {
+            if (error) {
+              return reject(error);
+            }
+
+            if (!result) {
+              return reject(new Error('Cloudinary upload failed with no result.'));
+            }
+
+            return resolve(result);
+          }
+        );
+
+        Readable.from(req.file.buffer).pipe(uploadStream);
+      });
+    } catch (cloudinaryError) {
+      return errorResponse(res, 500, cloudinaryError.message);
+    }
+
+    uploadedPublicId = uploadedAsset.public_id;
 
     const report = await MedicalReport.create({
       patientId: req.user._id,
       title: title.trim(),
       documentType: documentType || 'General',
-      fileUrl: req.file.path,       // Cloudinary secure URL
-      cloudinaryId: req.file.filename,
+      fileUrl: uploadedAsset.secure_url,
+      cloudinaryId: uploadedAsset.public_id,
       uploadedBy: req.user.role,
     });
 
@@ -75,9 +108,9 @@ exports.uploadMedicalReport = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Upload Error:', error);
-    // If Cloudinary storage threw, there may be an orphaned file — attempt cleanup
-    if (req.file?.filename) {
-      cloudinary.uploader.destroy(req.file.filename).catch(() => {});
+    // If DB persistence fails after upload, attempt Cloudinary cleanup.
+    if (uploadedPublicId) {
+      cloudinary.uploader.destroy(uploadedPublicId).catch(() => {});
     }
     return errorResponse(res, 500, 'Failed to upload report. Please try again.');
   }

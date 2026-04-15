@@ -1,5 +1,4 @@
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
 const dotenv = require('dotenv');
 
@@ -37,38 +36,11 @@ console.log(
   `[Upload] Cloudinary config applied. cloud_name=${process.env.CLOUDINARY_CLOUD_NAME || 'MISSING'}`
 );
 
-// 2. Set up the Storage Engine
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    try {
-      console.log(
-        `[Upload] Preparing Cloudinary upload for file=${file.originalname}, mimetype=${file.mimetype}`
-      );
-
-      if (missingCloudinaryVars.length > 0) {
-        throw new Error(
-          `Cloudinary is not configured. Missing: ${missingCloudinaryVars.join(', ')}`
-        );
-      }
-
-      // We allow standard image formats and PDFs for medical reports
-      return {
-        folder: 'healthcare_patient_reports', // This creates a neat folder in your Cloudinary dashboard
-        allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
-        resource_type: 'auto', // 'auto' is crucial so it accepts raw files like PDFs, not just images
-      };
-    } catch (error) {
-      console.error('[Upload] Cloudinary storage params error:', error.message);
-      throw error;
-    }
-  },
-});
-
-// 3. Initialize Multer with our Cloudinary storage engine
-const upload = multer({ 
-    storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB file size limit for security
+// 2. Keep files in memory and upload manually from the controller.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB file size limit for security
 });
 
 module.exports = upload;
+module.exports.cloudinary = cloudinary;
