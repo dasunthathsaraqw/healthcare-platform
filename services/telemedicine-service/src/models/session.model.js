@@ -5,6 +5,7 @@ const sessionSchema = new mongoose.Schema(
     appointmentId: {
       type: String,
       required: true,
+      unique: true,
       trim: true,
       index: true
     },
@@ -26,15 +27,15 @@ const sessionSchema = new mongoose.Schema(
       unique: true,
       trim: true
     },
-    sessionUrl: {
+    joinUrl: {
       type: String,
       required: true,
       trim: true
     },
     status: {
       type: String,
-      enum: ["scheduled", "active", "completed", "cancelled"],
-      default: "scheduled"
+      enum: ["CREATED", "ACTIVE", "ENDED", "CANCELLED"],
+      default: "CREATED"
     },
     scheduledAt: {
       type: Date,
@@ -45,6 +46,16 @@ const sessionSchema = new mongoose.Schema(
     },
     endedAt: {
       type: Date
+    },
+    createdBy: {
+      type: String,
+      default: "system",
+      trim: true
+    },
+    notes: {
+      type: String,
+      default: "",
+      trim: true
     }
   },
   {
