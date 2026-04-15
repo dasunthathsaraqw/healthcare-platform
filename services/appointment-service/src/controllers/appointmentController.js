@@ -1,5 +1,6 @@
 const Appointment = require("../models/Appointment");
 const { publishNotificationEvent } = require("../utils/rabbitmq");
+const axios = require("axios");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -12,6 +13,67 @@ const { publishNotificationEvent } = require("../utils/rabbitmq");
 const generateMeetingLink = (appointmentId) => {
   const room = `healthcare-${appointmentId}-${Math.random().toString(36).slice(2, 9)}`;
   return `https://meet.jit.si/${room}`;
+};
+
+const TELEMEDICINE_BASE_URL =
+  process.env.TELEMEDICINE_SERVICE_URL || "http://localhost:5004/api/telemedicine";
+
+const buildTelemedicineHeaders = () => {
+  const headers = { "Content-Type": "application/json" };
+
+  if (process.env.TELEMEDICINE_SERVICE_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.TELEMEDICINE_SERVICE_TOKEN}`;
+  }
+
+  return headers;
+};
+
+const normalizeTelemedicineMetadata = (session) => {
+  if (!session) {
+    return null;
+  }
+
+  return {
+    sessionId: session._id ? String(session._id) : "",
+    roomId: session.roomId || "",
+    joinUrl: session.joinUrl || "",
+    status: session.status || "",
+    scheduledAt: session.scheduledAt ? new Date(session.scheduledAt) : null,
+    syncedAt: new Date(),
+  };
+};
+
+const createOrGetTelemedicineSession = async (appointment) => {
+  const payload = {
+    appointmentId: String(appointment._id),
+    doctorId: appointment.doctorId,
+    patientId: appointment.patientId,
+    scheduledAt: appointment.dateTime,
+  };
+
+  const headers = buildTelemedicineHeaders();
+
+  try {
+    const response = await axios.post(`${TELEMEDICINE_BASE_URL}/sessions`, payload, {
+      headers,
+      timeout: 15000,
+    });
+    return response?.data?.data || null;
+  } catch (error) {
+    // Safe idempotency: if session already exists, fetch and reuse it.
+    if (error.response?.status === 409) {
+      const existing = await axios.get(
+        `${TELEMEDICINE_BASE_URL}/sessions/${appointment._id}`,
+        {
+          headers,
+          timeout: 15000,
+        }
+      );
+      return existing?.data?.data || null;
+    }
+
+    throw error;
+  }
 };
 
 /**
@@ -321,15 +383,45 @@ const updateAppointmentStatus = async (req, res) => {
       });
     }
 
+    const previousStatus = appointment.status;
+    const isTransitionToConfirmed =
+      previousStatus !== "confirmed" && status === "confirmed";
+
     appointment.status = status;
 
     if (rejectionReason) {
       appointment.rejectionReason = rejectionReason;
     }
 
-    // Auto-assign meeting link when confirming
-    if (status === "confirmed" && !appointment.meetingLink) {
-      appointment.meetingLink = generateMeetingLink(appointment._id.toString());
+    // Auto-assign meeting link + telemedicine session metadata when status becomes confirmed.
+    if (isTransitionToConfirmed) {
+      let telemedicineSession;
+      try {
+        telemedicineSession = await createOrGetTelemedicineSession(appointment);
+      } catch (error) {
+        const integrationError = new Error(
+          error.response?.data?.message ||
+            "Failed to create telemedicine session during appointment confirmation."
+        );
+        integrationError.statusCode = error.response?.status || 502;
+        throw integrationError;
+      }
+
+      const normalizedTelemedicine = normalizeTelemedicineMetadata(telemedicineSession);
+
+      if (normalizedTelemedicine) {
+        appointment.telemedicineSession = normalizedTelemedicine;
+        appointment.meetingLink =
+          normalizedTelemedicine.joinUrl ||
+          appointment.meetingLink ||
+          generateMeetingLink(appointment._id.toString());
+      } else {
+        const metadataError = new Error(
+          "Telemedicine session metadata is unavailable for the confirmed appointment."
+        );
+        metadataError.statusCode = 502;
+        throw metadataError;
+      }
     }
 
     await appointment.save();

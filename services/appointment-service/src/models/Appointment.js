@@ -64,6 +64,32 @@ const appointmentSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    telemedicineSession: {
+      sessionId: {
+        type: String,
+        default: "",
+      },
+      roomId: {
+        type: String,
+        default: "",
+      },
+      joinUrl: {
+        type: String,
+        default: "",
+      },
+      status: {
+        type: String,
+        default: "",
+      },
+      scheduledAt: {
+        type: Date,
+        default: null,
+      },
+      syncedAt: {
+        type: Date,
+        default: null,
+      },
+    },
 
     // ── Payment linkage ────────────────────────────────────────────────────────
     paymentStatus: {
