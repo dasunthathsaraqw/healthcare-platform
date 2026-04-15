@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
-const API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
+const API_BASE = "http://localhost:8080/api"; 
 
 function authHeaders() {
   const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -104,12 +104,30 @@ function ToastContainer({ toasts, removeToast }) {
 function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking }) {
   const [reason, setReason] = useState("");
   const [err, setErr]       = useState("");
+  
+  // Local guest state
+  const [guestInfo, setGuestInfo] = useState({
+    isForOthers: false,
+    name: "",
+    age: "",
+    email: ""
+  });
 
-  useEffect(() => { if (open) { setReason(""); setErr(""); } }, [open]);
+  useEffect(() => { 
+    if (open) { 
+      setReason(""); 
+      setErr(""); 
+      setGuestInfo({ isForOthers: false, name: "", age: "", email: "" });
+    } 
+  }, [open]);
 
   const handleSubmit = () => {
     if (!reason.trim()) { setErr("Please describe your reason for visit."); return; }
-    onConfirm({ reason: reason.trim() });
+    onConfirm({ 
+      reason: reason.trim(),
+      isForOthers: guestInfo.isForOthers,
+      guestInfo: guestInfo
+    });
   };
 
   if (!open || !doctor || !slot || typeof window === "undefined") return null;
@@ -143,7 +161,7 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
               ["Date",     formattedDate],
               ["Time",     slot.startTime],
               ["Duration", `${slot.slotDuration || 30} min`],
-              ["Fee",      doctor.consultationFee ? `$${doctor.consultationFee}` : "Free"],
+              ["Fee",      doctor.consultationFee ? `Rs. ${doctor.consultationFee}` : "Free"],
             ].map(([label, val]) => (
               <div key={label} className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3">
                 <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-0.5">{label}</p>
@@ -152,14 +170,56 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
             ))}
           </div>
 
+          {/* Booking for someone else toggle */}
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs font-bold text-gray-900">Booking for someone else?</p>
+                <p className="text-[10px] text-gray-400">Provide their details for the appointment</p>
+              </div>
+              <button 
+                onClick={() => setGuestInfo(p => ({ ...p, isForOthers: !p.isForOthers }))}
+                className={`w-10 h-5 rounded-full transition-colors relative ${guestInfo.isForOthers ? "bg-blue-600" : "bg-gray-300"}`}
+              >
+                <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${guestInfo.isForOthers ? "translate-x-5" : ""}`} />
+              </button>
+            </div>
+
+            {guestInfo.isForOthers && (
+              <div className="grid grid-cols-2 gap-3 animate-[slideDown_.2s_ease-out]">
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-500 uppercase mb-1">Full Name</label>
+                  <input type="text" placeholder="Patient's Name" 
+                    value={guestInfo.name}
+                    onChange={(e) => setGuestInfo(p => ({ ...p, name: e.target.value }))}
+                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-500 uppercase mb-1">Age</label>
+                  <input type="number" placeholder="Age" 
+                    value={guestInfo.age}
+                    onChange={(e) => setGuestInfo(p => ({ ...p, age: e.target.value }))}
+                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[9px] font-bold text-gray-500 uppercase mb-1">Email (for PDF/Notifications)</label>
+                  <input type="email" placeholder="patient@example.com" 
+                    value={guestInfo.email}
+                    onChange={(e) => setGuestInfo(p => ({ ...p, email: e.target.value }))}
+                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Reason */}
           <div>
             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">
               Reason for Visit <span className="text-red-400">*</span>
             </label>
-            <textarea rows={3} value={reason}
+            <textarea rows={2} value={reason}
               onChange={(e) => { setReason(e.target.value); setErr(""); }}
-              placeholder="Briefly describe your symptoms or reason for visit…"
+              placeholder="Briefly describe symptoms…"
               className={`w-full px-3.5 py-2.5 rounded-xl border text-sm text-gray-800 placeholder-gray-400
                 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                 bg-gray-50 transition ${err ? "border-red-300 bg-red-50" : "border-gray-200"}`} />
@@ -173,7 +233,7 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
               <p className="text-xs text-amber-700">
-                Consultation fee of <strong>${doctor.consultationFee}</strong> will be collected at the clinic
+                Consultation fee of <strong>Rs. {doctor.consultationFee}</strong> will be collected at the clinic
               </p>
             </div>
           )}
@@ -201,7 +261,12 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SUCCESS MODAL (after booking)
+// PAYMENT SUMMARY MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUCCESS MODAL (after payment/booking)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BookingSuccess({ open, doctor, date, slot, onClose, onDashboard }) {
@@ -249,10 +314,6 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
   const [loadSlots, setLoadSlots] = useState(false);
   const [selSlot,   setSelSlot]   = useState(null);
 
-  useEffect(() => {
-    if (open) { setDate(""); setSlots([]); setSelSlot(null); }
-  }, [open, doctor]);
-
   const fetchSlots = useCallback(async (d) => {
     if (!doctor || !d) return;
     setLoadSlots(true);
@@ -271,6 +332,17 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
   }, [doctor]);
 
   const handleDateChange = (d) => { setDate(d); fetchSlots(d); };
+
+  useEffect(() => {
+    if (open) { 
+      // User requested: pre-select date if it was searched in the home filter
+      const defaultDate = window.plannedDate || "";
+      setDate(defaultDate); 
+      if (defaultDate) fetchSlots(defaultDate);
+      setSlots([]); 
+      setSelSlot(null); 
+    }
+  }, [open, doctor, fetchSlots]);
 
   const rating = pseudoRating(doctor?.name || "");
 
@@ -295,7 +367,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
             <div className="flex items-center gap-3 mt-1.5">
               <StarRating rating={rating} />
               {doctor.consultationFee > 0 && (
-                <span className="text-white/80 text-xs font-semibold">${doctor.consultationFee} / visit</span>
+                <span className="text-white/80 text-xs font-semibold">Rs. {doctor.consultationFee} / visit</span>
               )}
             </div>
           </div>
@@ -390,15 +462,18 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                     <div className="grid grid-cols-3 gap-2">
                       {slots
                         .filter((s) => s.status !== "booked" && !s.isBooked)
-                        .map((slot) => (
+                        .map((slot, idx) => (
                           <button key={slot._id}
                             onClick={() => setSelSlot(selSlot?._id === slot._id ? null : slot)}
-                            className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all
+                            className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all flex flex-col items-center
                               ${selSlot?._id === slot._id
                                 ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
                                 : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
                               }`}>
-                            {slot.startTime}
+                            <span>{slot.startTime}</span>
+                            <span className={`text-[8px] uppercase ${selSlot?._id === slot._id ? "text-blue-100" : "text-gray-400"}`}>
+                              Patient No. {idx + 1}
+                            </span>
                           </button>
                         ))
                       }
@@ -474,8 +549,8 @@ function DoctorCard({ doctor, onView, onBook }) {
             <p className="text-[9px] text-blue-400 font-semibold">Yrs Exp</p>
           </div>
           <div className="bg-green-50 rounded-xl py-2">
-            <p className="text-base font-bold text-green-600">
-              {doctor.consultationFee != null ? `$${doctor.consultationFee}` : "—"}
+            <p className="text-sm font-bold text-green-600">
+              {doctor.consultationFee != null ? `Rs. ${doctor.consultationFee}` : "—"}
             </p>
             <p className="text-[9px] text-green-400 font-semibold">Fee</p>
           </div>
@@ -542,8 +617,14 @@ export default function DoctorsPage() {
   // Modals
   const [profileDoc,  setProfileDoc]  = useState(null);
   const [bookingData, setBookingData] = useState(null); // { doctor, slot, date }
+  const [summaryData, setSummaryData] = useState(null); // { doctor, slot, date, bookingInfo, appointmentId }
   const [successData, setSuccessData] = useState(null); // same shape
   const [booking,     setBooking]     = useState(false);
+  const [paying,      setPaying]      = useState(false);
+
+  // Hydration fix
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // Toasts
   const toastRef = useRef(0);
@@ -569,6 +650,8 @@ export default function DoctorsPage() {
         params,
         headers: authHeaders(),
       });
+      // Store date for pre-selection in modal
+      if (typeof window !== "undefined") window.plannedDate = dateQ;
       setDoctors(data.doctors || data || []);
     } catch (err) {
       addToast(err.response?.data?.message || "Failed to load doctors", "error");
@@ -581,21 +664,35 @@ export default function DoctorsPage() {
   useEffect(() => { handleSearch(); }, []); // eslint-disable-line
 
   // ── Book appointment ───────────────────────────────────────────────────────
-  const handleBookConfirm = async ({ reason }) => {
+  const handleBookConfirm = async ({ reason, isForOthers, guestInfo }) => {
     const { doctor, slot, date } = bookingData;
     setBooking(true);
     try {
-      await axios.post(`${API_BASE}/appointments`, {
+      const resp = await axios.post(`${API_BASE}/appointments`, {
         doctorId:      doctor._id,
+        doctorName:    doctor.name,
+        specialty:     doctor.specialty,
+        consultationFee: doctor.consultationFee,
         availabilityId: slot._id,
-        date,
-        startTime:     slot.startTime,
+        dateTime:       `${date}T${slot.startTime}:00`, // Combine to ISO-like string
         reason,
         type:          "in-person",
+        isForSomeoneElse: isForOthers,
+        bookedFor: {
+          name:  guestInfo.name,
+          age:   guestInfo.age,
+          email: guestInfo.email
+        }
       }, { headers: authHeaders() });
 
+      const apptId = resp.data?.appointment?._id;
+
       setBookingData(null);
+      // Show Summary instead of Success immediately
+      setBookingData(null);
+      // Show success modal immediately
       setSuccessData({ doctor, slot, date });
+      addToast("Appointment booked successfully!", "success");
     } catch (err) {
       addToast(err.response?.data?.message || "Booking failed. Please try again.", "error");
     } finally {
@@ -611,30 +708,34 @@ export default function DoctorsPage() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
-      <DoctorProfileModal
-        open={!!profileDoc}
-        doctor={profileDoc}
-        onClose={() => setProfileDoc(null)}
-        onBook={handleOpenBook}
-      />
-      <BookingModal
-        open={!!bookingData}
-        doctor={bookingData?.doctor}
-        slot={bookingData?.slot}
-        date={bookingData?.date}
-        onClose={() => setBookingData(null)}
-        onConfirm={handleBookConfirm}
-        booking={booking}
-      />
-      <BookingSuccess
-        open={!!successData}
-        doctor={successData?.doctor}
-        date={successData?.date}
-        slot={successData?.slot}
-        onClose={() => setSuccessData(null)}
-        onDashboard={() => router.push("/dashboard")}
-      />
+      {mounted && (
+        <>
+          <ToastContainer toasts={toasts} removeToast={removeToast} />
+          <DoctorProfileModal
+            open={!!profileDoc}
+            doctor={profileDoc}
+            onClose={() => setProfileDoc(null)}
+            onBook={handleOpenBook}
+          />
+          <BookingModal
+            open={!!bookingData}
+            doctor={bookingData?.doctor}
+            slot={bookingData?.slot}
+            date={bookingData?.date}
+            onClose={() => setBookingData(null)}
+            onConfirm={handleBookConfirm}
+            booking={booking}
+          />
+          <BookingSuccess
+            open={!!successData}
+            doctor={successData?.doctor}
+            date={successData?.date}
+            slot={successData?.slot}
+            onClose={() => setSuccessData(null)}
+            onDashboard={() => router.push("/dashboard")}
+          />
+        </>
+      )}
 
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
         {/* ── Hero / search bar ─────────────────────────────────────────── */}

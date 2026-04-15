@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
@@ -69,19 +70,22 @@ function StatCard({ label, value, icon, color, loading }) {
 // APPOINTMENT CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-function AppointmentCard({ appt, cancellable, onCancel }) {
+function AppointmentCard({ appt, onClick }) {
   const status  = appt.status || "pending";
   const sc      = STATUS_STYLES[status] || STATUS_STYLES.pending;
-  const docName = appt.doctorId?.name || appt.doctorName || "Doctor";
-  const spec    = appt.doctorId?.specialty || appt.specialty || "";
+  const docName = appt.doctorName || "Doctor";
+  const spec    = appt.specialty || "";
   const dt      = appt.dateTime || appt.date;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-4 flex items-center gap-3 group">
+    <button 
+      onClick={() => onClick(appt)}
+      className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all p-4 flex items-center gap-3 group"
+    >
       {/* Doctor avatar */}
-      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm">
-        {appt.doctorId?.profilePicture
-          ? <img src={appt.doctorId.profilePicture} alt={docName} className="w-full h-full rounded-full object-cover" />
+      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+        {appt.doctorProfilePicture
+          ? <img src={appt.doctorProfilePicture} alt={docName} className="w-full h-full rounded-full object-cover" />
           : getInitials(docName)
         }
       </div>
@@ -95,25 +99,202 @@ function AppointmentCard({ appt, cancellable, onCancel }) {
         <p className="text-xs text-gray-500 mt-0.5">
           {fmtDate(dt)}{fmtTime(dt) ? ` · ${fmtTime(dt)}` : ""}
         </p>
-        {appt.reason && (
-          <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{appt.reason}</p>
-        )}
       </div>
 
-      {/* Status + cancel */}
+      {/* Status */}
       <div className="flex flex-col items-end gap-1.5 shrink-0">
         <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${sc.bg} ${sc.text} ${sc.border}`}>
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${sc.dot} mr-1`} />
           {sc.label}
         </span>
-        {cancellable && (status === "pending" || status === "confirmed") && (
-          <button onClick={() => onCancel(appt._id)}
-            className="text-[10px] text-red-400 hover:text-red-600 font-semibold hover:underline transition-colors">
-            Cancel
-          </button>
-        )}
+        <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/>
+        </svg>
       </div>
-    </div>
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APPOINTMENT DETAIL MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
+  const [cancelStep, setCancelStep] = useState("view"); // "view" | "confirm"
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setCancelStep("view");
+      setReason("");
+      console.log("🔍 Detailed Appointment Data:", appt);
+    }
+  }, [open, appt]);
+
+  if (!open || !appt || typeof window === "undefined") return null;
+
+  const status = appt.status || "pending";
+  const sc = STATUS_STYLES[status] || STATUS_STYLES.pending;
+  const docName = appt.doctorName || "Doctor";
+  const dt = appt.dateTime || appt.date;
+
+  const handleJoinMeeting = () => {
+    if (appt.meetingLink) {
+      window.open(appt.meetingLink, "_blank");
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      
+      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-[scaleIn_0.2s_ease-out]">
+        {/* Header - Gradient Background */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white relative">
+          <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          
+          <div className="flex items-center gap-5">
+            <div className={`w-20 h-20 rounded-2xl bg-white/20 backdrop-blur shadow-inner flex items-center justify-center text-white text-3xl font-bold border border-white/30 overflow-hidden`}>
+              {appt.doctorProfilePicture ? (
+                <img src={appt.doctorProfilePicture} alt={docName} className="w-full h-full object-cover" />
+              ) : (
+                getInitials(docName)
+              )}
+            </div>
+            <div>
+              <p className="text-blue-100 text-xs font-bold uppercase tracking-widest mb-1">Appointment Details</p>
+              <h2 className="text-2xl font-black">{docName}</h2>
+              <p className="text-blue-100 text-sm font-medium">{appt.specialty || "Specialist"}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-8 space-y-8">
+          {/* Status and Time Row */}
+          <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between bg-slate-50 p-5 rounded-2xl border border-slate-100">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">When</p>
+              <p className="text-sm font-bold text-slate-900">{fmtDate(dt)}</p>
+              <p className="text-xs text-blue-600 font-bold mt-0.5">{fmtTime(dt)}</p>
+            </div>
+            <div className="h-px sm:h-8 sm:w-px bg-slate-200" />
+            <div className="text-right sm:text-left">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Status</p>
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${sc.bg} ${sc.text} ${sc.border}`}>
+                <span className={`w-2 h-2 rounded-full ${sc.dot}`} />
+                {sc.label}
+              </span>
+            </div>
+          </div>
+
+          {/* Reason for Visit */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Reason for Visit
+            </h3>
+            <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+              <p className="text-sm text-slate-600 leading-relaxed italic">
+                {appt.reason || "No specific reason provided for this consultation."}
+              </p>
+            </div>
+          </div>
+
+          {/* Actions / Cancellation Steps */}
+          <div className="space-y-3 pt-2">
+            {cancelStep === "view" ? (
+              <>
+                {status === "confirmed" && (appt.meetingLink || appt.meetingUrl) && (
+                  <button 
+                    onClick={handleJoinMeeting}
+                    className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 overflow-hidden group"
+                  >
+                    <span className="relative z-10">Join Video Consultation</span>
+                    <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                )}
+
+                <div className="flex gap-3">
+                  {(status === "pending" || status === "confirmed") && (
+                    <button 
+                      onClick={() => setCancelStep("confirm")}
+                      className="flex-1 py-3.5 rounded-2xl border-2 border-slate-100 text-slate-400 text-xs font-bold hover:bg-red-50 hover:border-red-100 hover:text-red-500 transition-all flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Cancel Appointment
+                    </button>
+                  )}
+                  <button 
+                    onClick={onClose}
+                    className="flex-1 py-3.5 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4 animate-[slideUp_0.2s_ease-out]">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                    Please provide a reason for cancellation
+                  </label>
+                  <textarea 
+                    autoFocus
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="e.g., I have a personal emergency..."
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-200 transition-all resize-none h-24"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setCancelStep("view")}
+                    className="flex-1 py-3.5 rounded-2xl border border-slate-100 text-slate-500 text-xs font-bold hover:bg-slate-50 transition-all"
+                  >
+                    Back
+                  </button>
+                  <button 
+                    onClick={() => onCancel(appt._id, reason)}
+                    disabled={cancelling === appt._id || !reason.trim()}
+                    className="flex-[2] py-3.5 rounded-2xl bg-red-600 text-white text-xs font-black shadow-lg shadow-red-200 hover:bg-red-700 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
+                  >
+                    {cancelling === appt._id ? (
+                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                    ) : "Confirm Cancellation"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>,
+    document.body
   );
 }
 
@@ -172,6 +353,7 @@ export default function PatientDashboard() {
   const [past,       setPast]       = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [cancelling, setCancelling] = useState(null);
+  const [selectedAppt, setSelectedAppt] = useState(null);
   const [error,      setError]      = useState("");
 
   // Bootstrap user from localStorage
@@ -205,11 +387,10 @@ export default function PatientDashboard() {
   useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
 
   // Cancel appointment
-  const handleCancel = async (id) => {
-    if (!confirm("Cancel this appointment?")) return;
+  const handleCancel = async (id, reason) => {
     setCancelling(id);
     try {
-      await axios.put(`${API_BASE}/appointments/${id}/cancel`, {}, { headers: authHeaders() });
+      await axios.put(`${API_BASE}/appointments/${id}/cancel`, { reason }, { headers: authHeaders() });
       setUpcoming((prev) =>
         prev.map((a) => a._id === id ? { ...a, status: "cancelled" } : a)
       );
@@ -217,6 +398,7 @@ export default function PatientDashboard() {
       setError("Failed to cancel. Please try again.");
     } finally {
       setCancelling(null);
+      setSelectedAppt(null); // Close modal after cancel
     }
   };
 
@@ -236,6 +418,15 @@ export default function PatientDashboard() {
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50/50 to-blue-50/20">
+      
+      {/* Detail Modal */}
+      <AppointmentDetailModal 
+        open={!!selectedAppt}
+        appt={selectedAppt}
+        onClose={() => setSelectedAppt(null)}
+        onCancel={handleCancel}
+        cancelling={cancelling}
+      />
 
       {/* ── Hero header ───────────────────────────────────────────── */}
       <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-cyan-600 px-4 sm:px-6 pt-10 pb-28 relative overflow-hidden">
@@ -333,8 +524,7 @@ export default function PatientDashboard() {
                 : upcoming.length === 0
                   ? <EmptyAppts type="upcoming" />
                   : upcoming.map((appt) => (
-                      <AppointmentCard key={appt._id} appt={appt} cancellable
-                        onCancel={cancelling === appt._id ? () => {} : handleCancel} />
+                      <AppointmentCard key={appt._id} appt={appt} onClick={setSelectedAppt} />
                     ))
               }
             </div>
@@ -357,7 +547,7 @@ export default function PatientDashboard() {
                 : past.length === 0
                   ? <EmptyAppts type="past" />
                   : past.slice(0, 10).map((appt) => (
-                      <AppointmentCard key={appt._id} appt={appt} cancellable={false} onCancel={() => {}} />
+                      <AppointmentCard key={appt._id} appt={appt} onClick={setSelectedAppt} />
                     ))
               }
             </div>
