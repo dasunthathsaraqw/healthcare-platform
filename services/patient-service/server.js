@@ -78,6 +78,11 @@ const patientRoutes = require('./src/routes/patientRoutes-auth');
 app.use("/api/patients", patientRoutes);
 console.log("✅ Patient routes registered at /api/patients");
 
+// Health metrics & GDPR data export routes (added April 15)
+const metricsRoutes = require('./src/routes/metricsRoutes');
+app.use("/api/patients", metricsRoutes);
+console.log("✅ Metrics & Export routes registered at /api/patients");
+
 // Test route to verify service is working
 app.get("/test", (req, res) => {
   res.json({
