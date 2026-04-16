@@ -251,3 +251,18 @@ exports.processRefund = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+exports.getAllPayments = async (req, res) => {
+  try {
+    const payments = await Payment.find().sort({ createdAt: -1 });
+    
+    return res.status(200).json({
+      success: true,
+      count: payments.length,
+      payments,
+    });
+  } catch (error) {
+    console.error("getAllPayments error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
