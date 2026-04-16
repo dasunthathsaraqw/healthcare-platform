@@ -198,17 +198,16 @@ exports.sendAppointmentBookedEmail = async (data) => {
     ? new Date(data.dateTime).toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' })
     : 'To be confirmed';
 
-  const subject = 'Appointment Booking Confirmation 📅';
-  const previewText = `Your appointment with ${data.doctorName} is confirmed for ${apptDate}.`;
+  const subject = 'Appointment Confirmed! 📅';
+  const previewText = `Your appointment with ${data.doctorName} is officially confirmed for ${apptDate}.`;
 
   const bodyHtml = `
     <p style="margin:0 0 20px;font-size:16px;color:#374151;line-height:1.6;">
       Hello <strong style="color:#111827;">${data.patientName || 'Patient'}</strong>,
     </p>
     <p style="margin:0 0 24px;font-size:15px;color:#4b5563;line-height:1.7;">
-      Your appointment request has been <strong>received</strong> and is 
-      <span style="color:#d97706;font-weight:600;">pending confirmation</span> from your doctor. 
-      You'll receive another notification once it's confirmed.
+      Great news! Your medical appointment has been <strong>successfully booked and confirmed</strong>. 
+      You can now access your meeting link and other details directly from your dashboard.
     </p>
 
     <!-- Appointment card -->
@@ -216,14 +215,14 @@ exports.sendAppointmentBookedEmail = async (data) => {
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
         <tr>
           <td style="padding:6px 0;">
-            <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#166534;">Doctor</span><br/>
-            <span style="font-size:16px;font-weight:600;color:#14532d;">${data.doctorName || 'N/A'}</span>
+            <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#166534;">Status</span><br/>
+            <span style="font-size:15px;font-weight:700;color:#16a34a;">CONFIRMED</span>
           </td>
         </tr>
         <tr>
           <td style="padding:12px 0 0;">
-            <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#166534;">Specialty</span><br/>
-            <span style="font-size:15px;color:#15803d;">${data.specialty || 'General'}</span>
+            <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#166534;">Doctor</span><br/>
+            <span style="font-size:16px;font-weight:600;color:#14532d;">${data.doctorName || 'N/A'}</span>
           </td>
         </tr>
         <tr>
@@ -239,25 +238,38 @@ exports.sendAppointmentBookedEmail = async (data) => {
             <span style="font-size:15px;color:#15803d;">${data.reason}</span>
           </td>
         </tr>` : ''}
+        ${data.meetingLink ? `
+        <tr>
+          <td style="padding:12px 0 0;">
+            <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#166534;">Meeting Link</span><br/>
+            <a href="${data.meetingLink}" style="font-size:14px;color:#2563eb;font-weight:600;text-decoration:underline;">Join Consultation →</a>
+          </td>
+        </tr>` : ''}
       </table>
+    </div>
+
+    <div style="background:#f8fafc;border-radius:10px;padding:16px;margin:0 0 8px;text-align:center;">
+      <p style="margin:0;font-size:13px;color:#64748b;line-height:1.5;">
+        Please log in 10 minutes before your scheduled time to prepare for your consultation.
+      </p>
     </div>
   `;
 
   const html = buildHtmlEmail({
     previewText,
-    title: 'Appointment Requested',
+    title: 'Appointment Confirmed',
     bodyHtml,
-    ctaText: 'View My Appointments',
+    ctaText: 'Go to My Dashboard',
     ctaUrl: process.env.FRONTEND_URL
-      ? `${process.env.FRONTEND_URL}/dashboard/appointments`
-      : 'http://localhost:3000/dashboard/appointments',
+      ? `${process.env.FRONTEND_URL}/dashboard`
+      : 'http://localhost:3000/dashboard',
   });
 
   if (!isCredsConfigured()) {
     mockLog(
       data.patientEmail || 'patient@example.com',
       subject,
-      `Appointment with ${data.doctorName} on ${apptDate}`
+      `Appointment with ${data.doctorName} on ${apptDate} is CONFIRMED`
     );
     return;
   }
@@ -267,7 +279,7 @@ exports.sendAppointmentBookedEmail = async (data) => {
     to: data.patientEmail,
     subject,
     html,
-    text: `Hello ${data.patientName}, your appointment with ${data.doctorName} on ${apptDate} has been requested. Please wait for doctor confirmation.`,
+    text: `Hello ${data.patientName}, your appointment with ${data.doctorName} on ${apptDate} is officially confirmed. See you then!`,
   });
 
   console.log(`📧 Appointment email sent to ${data.patientEmail}: ${info.messageId}`);

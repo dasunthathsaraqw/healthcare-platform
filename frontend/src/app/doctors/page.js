@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
-const API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
+const API_BASE = "http://localhost:8080/api";
 
 function authHeaders() {
   const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -24,7 +24,6 @@ function getInitials(name = "") {
 }
 
 function pseudoRating(name = "") {
-  // Deterministic 3.5–5.0 star based on name
   const code = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   return (3.5 + (code % 16) / 10).toFixed(1);
 }
@@ -55,13 +54,13 @@ function avatarColor(name = "") {
 }
 
 const SPECIALTY_BADGES = {
-  Cardiologist:       "bg-red-50   text-red-600   border-red-200",
-  Dermatologist:      "bg-pink-50  text-pink-600  border-pink-200",
-  Neurologist:        "bg-purple-50 text-purple-600 border-purple-200",
-  Pediatrician:       "bg-blue-50  text-blue-600  border-blue-200",
-  Gynecologist:       "bg-rose-50  text-rose-600  border-rose-200",
-  Orthopedic:         "bg-orange-50 text-orange-600 border-orange-200",
-  "General Physician":"bg-green-50 text-green-600 border-green-200",
+  Cardiologist:        "bg-red-50   text-red-600   border-red-200",
+  Dermatologist:       "bg-pink-50  text-pink-600  border-pink-200",
+  Neurologist:         "bg-purple-50 text-purple-600 border-purple-200",
+  Pediatrician:        "bg-blue-50  text-blue-600  border-blue-200",
+  Gynecologist:        "bg-rose-50  text-rose-600  border-rose-200",
+  Orthopedic:          "bg-orange-50 text-orange-600 border-orange-200",
+  "General Physician": "bg-green-50 text-green-600 border-green-200",
 };
 
 function SpecBadge({ specialty }) {
@@ -105,11 +104,28 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
   const [reason, setReason] = useState("");
   const [err, setErr]       = useState("");
 
-  useEffect(() => { if (open) { setReason(""); setErr(""); } }, [open]);
+  const [guestInfo, setGuestInfo] = useState({
+    isForOthers: false,
+    name: "",
+    age: "",
+    email: ""
+  });
+
+  useEffect(() => {
+    if (open) {
+      setReason("");
+      setErr("");
+      setGuestInfo({ isForOthers: false, name: "", age: "", email: "" });
+    }
+  }, [open]);
 
   const handleSubmit = () => {
     if (!reason.trim()) { setErr("Please describe your reason for visit."); return; }
-    onConfirm({ reason: reason.trim() });
+    onConfirm({
+      reason: reason.trim(),
+      isForOthers: guestInfo.isForOthers,
+      guestInfo,
+    });
   };
 
   if (!open || !doctor || !slot || typeof window === "undefined") return null;
@@ -143,7 +159,7 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
               ["Date",     formattedDate],
               ["Time",     slot.startTime],
               ["Duration", `${slot.slotDuration || 30} min`],
-              ["Fee",      doctor.consultationFee ? `$${doctor.consultationFee}` : "Free"],
+              ["Fee",      doctor.consultationFee ? `Rs. ${doctor.consultationFee}` : "Free"],
             ].map(([label, val]) => (
               <div key={label} className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3">
                 <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-0.5">{label}</p>
@@ -152,28 +168,70 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
             ))}
           </div>
 
+          {/* Booking for someone else toggle */}
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs font-bold text-gray-900">Booking for someone else?</p>
+                <p className="text-[10px] text-gray-400">Provide their details for the appointment</p>
+              </div>
+              <button
+                onClick={() => setGuestInfo(p => ({ ...p, isForOthers: !p.isForOthers }))}
+                className={`w-10 h-5 rounded-full transition-colors relative ${guestInfo.isForOthers ? "bg-blue-600" : "bg-gray-300"}`}
+              >
+                <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${guestInfo.isForOthers ? "translate-x-5" : ""}`} />
+              </button>
+            </div>
+
+            {guestInfo.isForOthers && (
+              <div className="grid grid-cols-2 gap-3 animate-[slideDown_.2s_ease-out]">
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-500 uppercase mb-1">Full Name</label>
+                  <input type="text" placeholder="Patient's Name"
+                    value={guestInfo.name}
+                    onChange={(e) => setGuestInfo(p => ({ ...p, name: e.target.value }))}
+                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-gray-500 uppercase mb-1">Age</label>
+                  <input type="number" placeholder="Age"
+                    value={guestInfo.age}
+                    onChange={(e) => setGuestInfo(p => ({ ...p, age: e.target.value }))}
+                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[9px] font-bold text-gray-500 uppercase mb-1">Email (for PDF/Notifications)</label>
+                  <input type="email" placeholder="patient@example.com"
+                    value={guestInfo.email}
+                    onChange={(e) => setGuestInfo(p => ({ ...p, email: e.target.value }))}
+                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Reason */}
           <div>
             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wide mb-1.5">
               Reason for Visit <span className="text-red-400">*</span>
             </label>
-            <textarea rows={3} value={reason}
+            <textarea rows={2} value={reason}
               onChange={(e) => { setReason(e.target.value); setErr(""); }}
-              placeholder="Briefly describe your symptoms or reason for visit…"
+              placeholder="Briefly describe symptoms…"
               className={`w-full px-3.5 py-2.5 rounded-xl border text-sm text-gray-800 placeholder-gray-400
                 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
                 bg-gray-50 transition ${err ? "border-red-300 bg-red-50" : "border-gray-200"}`} />
             {err && <p className="text-xs text-red-500 mt-1">{err}</p>}
           </div>
 
-          {/* Fee notice */}
+          {/* Fee notice — updated text since payment is now online */}
           {doctor.consultationFee > 0 && (
             <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl">
               <svg className="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
               <p className="text-xs text-amber-700">
-                Consultation fee of <strong>${doctor.consultationFee}</strong> will be collected at the clinic
+                Consultation fee of <strong>Rs. {doctor.consultationFee}</strong> will be collected via online payment
               </p>
             </div>
           )}
@@ -201,13 +259,178 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SUCCESS MODAL (after booking)
+// PAYMENT SUMMARY MODAL  ← NEW
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
+  if (!open || !summaryData || typeof window === "undefined") return null;
+
+  const { doctor, slot, date, bookingInfo, appointmentId } = summaryData;
+
+  const formattedDate = date
+    ? new Date(date).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
+    : "—";
+
+  const hasFee = doctor.consultationFee > 0;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[310] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={!paying ? onClose : undefined} />
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-[scaleIn_.2s_ease-out]">
+
+        {/* Header */}
+        <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-500 flex items-center gap-3">
+  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+  </div>
+  <div>
+    <p className="text-white font-bold text-base">Complete Payment</p>
+    <p className="text-blue-100 text-xs">Your appointment will be confirmed after payment</p>
+     </div>
+          {!paying && (
+            <button onClick={onClose} className="ml-auto p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          )}
+        </div>
+
+        <div className="p-6 space-y-4">
+
+          {/* Doctor info */}
+          <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${avatarColor(doctor.name)} flex items-center justify-center text-white font-bold text-base shrink-0`}>
+              {getInitials(doctor.name)}
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">{doctor.name}</p>
+              <SpecBadge specialty={doctor.specialty} />
+            </div>
+          </div>
+
+          {/* Appointment details grid */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              ["Date",     formattedDate],
+              ["Time",     slot.startTime],
+              ["Duration", `${slot.slotDuration || 30} min`],
+              ["Appt ID",  appointmentId ? `#${appointmentId.toString().slice(-6).toUpperCase()}` : "—"],
+            ].map(([label, val]) => (
+              <div key={label} className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3">
+                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-0.5">{label}</p>
+                <p className="text-sm font-bold text-gray-900 truncate">{val}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Guest info if applicable */}
+          {bookingInfo?.isForSomeoneElse && bookingInfo?.bookedFor?.name && (
+            <div className="flex items-start gap-2 px-4 py-3 bg-purple-50 border border-purple-100 rounded-xl">
+              <svg className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+              <div>
+                <p className="text-xs font-bold text-purple-700">Booked for {bookingInfo.bookedFor.name}</p>
+                {bookingInfo.bookedFor.email && (
+                  <p className="text-[10px] text-purple-500">{bookingInfo.bookedFor.email}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Payment section */}
+          {hasFee ? (
+            <>
+              {/* Fee breakdown */}
+              <div className="border border-gray-100 rounded-xl overflow-hidden">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Payment Summary</p>
+                </div>
+                <div className="px-4 py-3 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Consultation Fee</span>
+                    <span className="font-semibold text-gray-900">Rs. {doctor.consultationFee.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Service Charge</span>
+                    <span className="font-semibold text-green-600">Free</span>
+                  </div>
+                  <div className="border-t border-dashed border-gray-200 pt-2 flex justify-between">
+                    <span className="text-sm font-bold text-gray-900">Total</span>
+                    <span className="text-base font-extrabold text-blue-600">Rs. {doctor.consultationFee.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* PayHere notice */}
+              <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl">
+                <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                </svg>
+                <p className="text-xs text-blue-700">
+                  You'll be redirected to <strong>PayHere</strong> to complete your payment securely
+                </p>
+              </div>
+
+              {/* Pay button */}
+              <div className="flex gap-3 pt-1">
+                <button onClick={onClose} disabled={paying}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+                  Cancel
+                </button>
+                <button onClick={onPay} disabled={paying}
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-700 hover:to-emerald-600
+                    text-white text-sm font-bold shadow-md shadow-green-200 flex items-center justify-center gap-2 transition-all disabled:opacity-60">
+                  {paying ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                      Redirecting…
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                      </svg>
+                      Pay Rs. {doctor.consultationFee.toFixed(2)}
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          ) : (
+            /* Free appointment — no payment needed */
+            <>
+              <div className="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-100 rounded-xl">
+                <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p className="text-xs text-green-700 font-semibold">
+                  This is a free consultation — no payment required!
+                </p>
+              </div>
+              <button onClick={onClose}
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold
+                  shadow-md shadow-blue-200 transition-colors">
+                View My Appointments
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUCCESS MODAL (after payment/booking — only for free appointments now)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BookingSuccess({ open, doctor, date, slot, onClose, onDashboard }) {
   if (!open || typeof window === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-[310] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[320] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8 text-center animate-[scaleIn_.22s_ease-out]">
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-5">
@@ -249,10 +472,6 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
   const [loadSlots, setLoadSlots] = useState(false);
   const [selSlot,   setSelSlot]   = useState(null);
 
-  useEffect(() => {
-    if (open) { setDate(""); setSlots([]); setSelSlot(null); }
-  }, [open, doctor]);
-
   const fetchSlots = useCallback(async (d) => {
     if (!doctor || !d) return;
     setLoadSlots(true);
@@ -271,6 +490,16 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
   }, [doctor]);
 
   const handleDateChange = (d) => { setDate(d); fetchSlots(d); };
+
+  useEffect(() => {
+    if (open) {
+      const defaultDate = window.plannedDate || "";
+      setDate(defaultDate);
+      if (defaultDate) fetchSlots(defaultDate);
+      setSlots([]);
+      setSelSlot(null);
+    }
+  }, [open, doctor, fetchSlots]);
 
   const rating = pseudoRating(doctor?.name || "");
 
@@ -295,7 +524,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
             <div className="flex items-center gap-3 mt-1.5">
               <StarRating rating={rating} />
               {doctor.consultationFee > 0 && (
-                <span className="text-white/80 text-xs font-semibold">${doctor.consultationFee} / visit</span>
+                <span className="text-white/80 text-xs font-semibold">Rs. {doctor.consultationFee} / visit</span>
               )}
             </div>
           </div>
@@ -310,7 +539,6 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
 
             {/* Left: doctor info */}
             <div className="p-6 space-y-5">
-              {/* Qualifications */}
               {(doctor.qualifications || []).length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Qualifications</p>
@@ -321,8 +549,6 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                   </div>
                 </div>
               )}
-
-              {/* Languages */}
               {(doctor.languages || []).length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Languages</p>
@@ -333,8 +559,6 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                   </div>
                 </div>
               )}
-
-              {/* Clinic address */}
               {doctor.clinicAddress && (
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Clinic Address</p>
@@ -347,8 +571,6 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                   </div>
                 </div>
               )}
-
-              {/* Bio */}
               {doctor.bio && (
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">About</p>
@@ -360,8 +582,6 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
             {/* Right: availability + booking */}
             <div className="p-6 space-y-4">
               <p className="text-sm font-bold text-gray-900">Book an Appointment</p>
-
-              {/* Date picker */}
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Select Date</label>
                 <input type="date" value={date} min={new Date().toISOString().split("T")[0]}
@@ -369,8 +589,6 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700
                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition" />
               </div>
-
-              {/* Slots */}
               {date && (
                 <div>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Available Slots</p>
@@ -390,15 +608,18 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                     <div className="grid grid-cols-3 gap-2">
                       {slots
                         .filter((s) => s.status !== "booked" && !s.isBooked)
-                        .map((slot) => (
+                        .map((slot, idx) => (
                           <button key={slot._id}
                             onClick={() => setSelSlot(selSlot?._id === slot._id ? null : slot)}
-                            className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all
+                            className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all flex flex-col items-center
                               ${selSlot?._id === slot._id
                                 ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
                                 : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
                               }`}>
-                            {slot.startTime}
+                            <span>{slot.startTime}</span>
+                            <span className={`text-[8px] uppercase ${selSlot?._id === slot._id ? "text-blue-100" : "text-gray-400"}`}>
+                              Patient No. {idx + 1}
+                            </span>
                           </button>
                         ))
                       }
@@ -413,8 +634,6 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                   )}
                 </div>
               )}
-
-              {/* Confirm booking CTA */}
               {selSlot && date && (
                 <div className="pt-2 border-t border-gray-100">
                   <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-100 mb-3">
@@ -444,16 +663,13 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
 // DOCTOR CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DoctorCard({ doctor, onView, onBook }) {
+function DoctorCard({ doctor, onView }) {
   const rating = pseudoRating(doctor.name);
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg hover:border-blue-100
       transition-all duration-200 overflow-hidden group flex flex-col">
-      {/* Top gradient bar */}
       <div className={`h-1.5 w-full bg-gradient-to-r ${avatarColor(doctor.name)}`} />
-
       <div className="p-5 flex flex-col gap-4 flex-1">
-        {/* Top row */}
         <div className="flex items-start gap-3">
           <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${avatarColor(doctor.name)} flex items-center justify-center text-white font-bold text-base shrink-0 shadow-sm`}>
             {doctor.profilePicture
@@ -466,16 +682,14 @@ function DoctorCard({ doctor, onView, onBook }) {
             <SpecBadge specialty={doctor.specialty} />
           </div>
         </div>
-
-        {/* Stats */}
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="bg-blue-50 rounded-xl py-2">
             <p className="text-base font-bold text-blue-600">{doctor.experience ?? "—"}</p>
             <p className="text-[9px] text-blue-400 font-semibold">Yrs Exp</p>
           </div>
           <div className="bg-green-50 rounded-xl py-2">
-            <p className="text-base font-bold text-green-600">
-              {doctor.consultationFee != null ? `$${doctor.consultationFee}` : "—"}
+            <p className="text-sm font-bold text-green-600">
+              {doctor.consultationFee != null ? `Rs. ${doctor.consultationFee}` : "—"}
             </p>
             <p className="text-[9px] text-green-400 font-semibold">Fee</p>
           </div>
@@ -484,8 +698,6 @@ function DoctorCard({ doctor, onView, onBook }) {
             <p className="text-[9px] text-amber-400 font-semibold">Rating</p>
           </div>
         </div>
-
-        {/* Stars + qualifications */}
         <div className="space-y-2">
           <StarRating rating={rating} />
           <div className="flex flex-wrap gap-1">
@@ -497,15 +709,9 @@ function DoctorCard({ doctor, onView, onBook }) {
             )}
           </div>
         </div>
-
-        {/* Languages */}
         {(doctor.languages || []).length > 0 && (
-          <p className="text-xs text-gray-400 truncate">
-            🌐 {doctor.languages.join(", ")}
-          </p>
+          <p className="text-xs text-gray-400 truncate">🌐 {doctor.languages.join(", ")}</p>
         )}
-
-        {/* Actions */}
         <div className="flex gap-2 mt-auto pt-2 border-t border-gray-100">
           <button onClick={() => onView(doctor)}
             className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold
@@ -534,18 +740,21 @@ export default function DoctorsPage() {
   const [loading,  setLoading]  = useState(false);
   const [searched, setSearched] = useState(false);
 
-  // Filters
-  const [nameQ,     setNameQ]     = useState("");
+  const [nameQ,      setNameQ]      = useState("");
   const [specialtyQ, setSpecialtyQ] = useState("All Specialties");
-  const [dateQ,     setDateQ]     = useState("");
+  const [dateQ,      setDateQ]      = useState("");
 
   // Modals
   const [profileDoc,  setProfileDoc]  = useState(null);
-  const [bookingData, setBookingData] = useState(null); // { doctor, slot, date }
-  const [successData, setSuccessData] = useState(null); // same shape
+  const [bookingData, setBookingData] = useState(null);   // { doctor, slot, date }
+  const [summaryData, setSummaryData] = useState(null);   // { doctor, slot, date, bookingInfo, appointmentId }
+  const [successData, setSuccessData] = useState(null);   // free-appt success
   const [booking,     setBooking]     = useState(false);
+  const [paying,      setPaying]      = useState(false);
 
-  // Toasts
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   const toastRef = useRef(0);
   const [toasts, setToasts] = useState([]);
   const addToast = useCallback((message, type = "info") => {
@@ -555,20 +764,21 @@ export default function DoctorsPage() {
   }, []);
   const removeToast = useCallback((id) => setToasts((p) => p.filter((t) => t.id !== id)), []);
 
-  // ── Search ─────────────────────────────────────────────────────────────────
+  // ── Search ──────────────────────────────────────────────────────────────────
   const handleSearch = useCallback(async () => {
     setLoading(true);
     setSearched(true);
     try {
       const params = {};
-      if (nameQ.trim())                          params.name      = nameQ.trim();
-      if (specialtyQ !== "All Specialties")       params.specialty = specialtyQ;
-      if (dateQ)                                  params.date      = dateQ;
+      if (nameQ.trim())                    params.name      = nameQ.trim();
+      if (specialtyQ !== "All Specialties") params.specialty = specialtyQ;
+      if (dateQ)                            params.date      = dateQ;
 
       const { data } = await axios.get(`${API_BASE}/doctors`, {
         params,
         headers: authHeaders(),
       });
+      if (typeof window !== "undefined") window.plannedDate = dateQ;
       setDoctors(data.doctors || data || []);
     } catch (err) {
       addToast(err.response?.data?.message || "Failed to load doctors", "error");
@@ -577,31 +787,140 @@ export default function DoctorsPage() {
     }
   }, [nameQ, specialtyQ, dateQ, addToast]);
 
-  // Load all on mount
   useEffect(() => { handleSearch(); }, []); // eslint-disable-line
 
-  // ── Book appointment ───────────────────────────────────────────────────────
-  const handleBookConfirm = async ({ reason }) => {
-    const { doctor, slot, date } = bookingData;
-    setBooking(true);
-    try {
-      await axios.post(`${API_BASE}/appointments`, {
-        doctorId:      doctor._id,
-        availabilityId: slot._id,
-        date,
-        startTime:     slot.startTime,
-        reason,
-        type:          "in-person",
-      }, { headers: authHeaders() });
+  // ── Step 1: Book appointment (create record in DB) ──────────────────────────
+// ── Step 1: Reserve slot (create temporary hold) ──────────────────────────
+const handleBookConfirm = async ({ reason, isForOthers, guestInfo }) => {
+  const { doctor, slot, date } = bookingData;
+  setBooking(true);
+  try {
+    // Reserve the slot first (no appointment created yet)
+    const resp = await axios.post(`${API_BASE}/appointments/reserve`, {
+      doctorId: doctor._id,
+      doctorName: doctor.name,
+      specialty: doctor.specialty,
+      dateTime: `${date}T${slot.startTime}:00`,
+      reason,
+      consultationFee: doctor.consultationFee,
+      isForSomeoneElse: isForOthers,
+      bookedFor: {
+        name: guestInfo.name,
+        age: guestInfo.age,
+        email: guestInfo.email,
+      },
+    }, { headers: authHeaders() });
 
-      setBookingData(null);
+    const { reservationId, reservationData } = resp.data;
+    const hasFee = doctor.consultationFee > 0;
+
+    setBookingData(null);
+
+    if (hasFee) {
+      // Store reservation ID to use during payment
+      setSummaryData({
+        doctor,
+        slot,
+        date,
+        reservationId,  // ← Make sure this is included
+        reservationData,
+        bookingInfo: {
+          isForSomeoneElse: isForOthers,
+          bookedFor: { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email },
+        },
+      });
+      addToast("Slot reserved! Please complete payment within 10 minutes.", "info");
+    } else {
+      // Free appointment - create directly
+      const createResp = await axios.post(`${API_BASE}/appointments/create-from-reservation`, {
+        reservationId,
+        paymentId: "free_appointment",
+      }, { headers: authHeaders() });
+      
       setSuccessData({ doctor, slot, date });
-    } catch (err) {
-      addToast(err.response?.data?.message || "Booking failed. Please try again.", "error");
-    } finally {
-      setBooking(false);
+      addToast("Appointment booked successfully!", "success");
+      setTimeout(() => router.push("/dashboard/appointments"), 3000);
     }
-  };
+  } catch (err) {
+    console.error("Booking error:", err);
+    addToast(err.response?.data?.message || "Booking failed. Please try again.", "error");
+  } finally {
+    setBooking(false);
+  }
+};
+
+  // ── Step 2: Pay via PayHere ─────────────────────────────────────────────────
+// ── Step 2: Pay via PayHere ─────────────────────────────────────────────────
+const handleProceedToPayment = async () => {
+  if (!summaryData) return;
+  setPaying(true);
+  try {
+    const { doctor, reservationId, bookingInfo } = summaryData;  // ← Get reservationId from summaryData
+
+    const { data } = await axios.post(
+      `${API_BASE}/payments/initiate`,
+      {
+        appointmentId: reservationId,  // ← Use reservationId as appointmentId
+        amount: doctor.consultationFee,
+        patientName: bookingInfo.isForSomeoneElse
+          ? bookingInfo.bookedFor?.name
+          : undefined,
+        patientEmail: bookingInfo.isForSomeoneElse
+          ? bookingInfo.bookedFor?.email
+          : undefined,
+        reservationId,  // ← Pass reservationId separately
+      },
+      { headers: authHeaders() }
+    );
+    
+    console.log("🔍 Full paymentData being sent:", JSON.stringify(data.paymentData, null, 2));
+
+    // Verify all required fields are present
+    const required = ['merchant_id', 'order_id', 'amount', 'currency', 'hash', 'return_url', 'notify_url'];
+    required.forEach(field => {
+      if (!data.paymentData[field]) {
+        console.error(`❌ MISSING REQUIRED FIELD: ${field}`);
+      } else {
+        console.log(`✅ ${field}: ${data.paymentData[field]}`);
+      }
+    });
+
+    if (data.success && data.checkoutUrl && data.paymentData) {
+      // Save orderId so payment-status page can poll even without URL params
+      if (typeof window !== "undefined") {
+        localStorage.setItem("lastPayhereOrderId", data.orderId);
+        // Also store reservationId for recovery
+        localStorage.setItem("lastReservationId", reservationId);
+      }
+
+      // Build hidden form and submit to PayHere
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = data.checkoutUrl;
+      form.style.display = "none";
+
+      Object.keys(data.paymentData).forEach((key) => {
+        if (data.paymentData[key] !== null && data.paymentData[key] !== undefined) {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = key;
+          input.value = data.paymentData[key];
+          form.appendChild(input);
+        }
+      });
+
+      document.body.appendChild(form);
+      console.log("🚀 Submitting to PayHere:", data.checkoutUrl);
+      form.submit();
+    } else {
+      throw new Error("Invalid payment response from server");
+    }
+  } catch (err) {
+    console.error("Payment error:", err);
+    addToast(err.response?.data?.message || "Payment failed. Please try again.", "error");
+    setPaying(false);
+  }
+};
 
   const handleOpenBook = (doctor, slot, date) => {
     setProfileDoc(null);
@@ -611,42 +930,57 @@ export default function DoctorsPage() {
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
-      <DoctorProfileModal
-        open={!!profileDoc}
-        doctor={profileDoc}
-        onClose={() => setProfileDoc(null)}
-        onBook={handleOpenBook}
-      />
-      <BookingModal
-        open={!!bookingData}
-        doctor={bookingData?.doctor}
-        slot={bookingData?.slot}
-        date={bookingData?.date}
-        onClose={() => setBookingData(null)}
-        onConfirm={handleBookConfirm}
-        booking={booking}
-      />
-      <BookingSuccess
-        open={!!successData}
-        doctor={successData?.doctor}
-        date={successData?.date}
-        slot={successData?.slot}
-        onClose={() => setSuccessData(null)}
-        onDashboard={() => router.push("/dashboard")}
-      />
+      {mounted && (
+        <>
+          <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+          <DoctorProfileModal
+            open={!!profileDoc}
+            doctor={profileDoc}
+            onClose={() => setProfileDoc(null)}
+            onBook={handleOpenBook}
+          />
+
+          <BookingModal
+            open={!!bookingData}
+            doctor={bookingData?.doctor}
+            slot={bookingData?.slot}
+            date={bookingData?.date}
+            onClose={() => setBookingData(null)}
+            onConfirm={handleBookConfirm}
+            booking={booking}
+          />
+
+          {/* ← NEW: Payment summary shown after booking is created */}
+          <PaymentSummaryModal
+            open={!!summaryData}
+            summaryData={summaryData}
+            onClose={() => setSummaryData(null)}
+            onPay={handleProceedToPayment}
+            paying={paying}
+          />
+
+          {/* Success only shown for free appointments now */}
+          <BookingSuccess
+            open={!!successData}
+            doctor={successData?.doctor}
+            date={successData?.date}
+            slot={successData?.slot}
+            onClose={() => setSuccessData(null)}
+            onDashboard={() => router.push("/dashboard")}
+          />
+        </>
+      )}
 
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
-        {/* ── Hero / search bar ─────────────────────────────────────────── */}
+        {/* ── Hero / search bar ──────────────────────────────────────────── */}
         <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-cyan-600 px-4 sm:px-6 pt-12 pb-20">
           <div className="max-w-4xl mx-auto text-center">
             <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">Find Your Doctor</h1>
             <p className="text-blue-200 text-base mb-8">Search from our network of verified healthcare professionals</p>
 
-            {/* Search card */}
             <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-4 sm:p-5">
               <div className="flex flex-col sm:flex-row gap-3">
-                {/* Name */}
                 <div className="relative flex-1">
                   <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-300 pointer-events-none"
                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -658,19 +992,16 @@ export default function DoctorsPage() {
                     className="w-full pl-9 pr-4 py-3 rounded-xl bg-white/20 backdrop-blur border border-white/30
                       text-white placeholder-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-white/50" />
                 </div>
-                {/* Specialty */}
                 <select value={specialtyQ} onChange={(e) => setSpecialtyQ(e.target.value)}
                   className="px-4 py-3 rounded-xl bg-white/20 backdrop-blur border border-white/30
                     text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/50 cursor-pointer
                     [&>option]:text-gray-800 [&>option]:bg-white">
                   {SPECIALTIES.map((s) => <option key={s}>{s}</option>)}
                 </select>
-                {/* Date */}
                 <input type="date" value={dateQ} min={new Date().toISOString().split("T")[0]}
                   onChange={(e) => setDateQ(e.target.value)}
                   className="px-4 py-3 rounded-xl bg-white/20 backdrop-blur border border-white/30
                     text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/50" />
-                {/* Search btn */}
                 <button onClick={handleSearch} disabled={loading}
                   className="px-6 py-3 rounded-xl bg-white text-blue-600 text-sm font-bold
                     hover:bg-blue-50 disabled:opacity-70 shadow-lg transition-colors whitespace-nowrap
@@ -688,7 +1019,6 @@ export default function DoctorsPage() {
 
         {/* ── Results ───────────────────────────────────────────────────── */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 -mt-8 pb-12">
-          {/* Count bar */}
           <div className="flex items-center justify-between mb-5">
             <p className="text-sm font-semibold text-gray-700">
               {loading ? "Searching…" : `${doctors.length} doctor${doctors.length !== 1 ? "s" : ""} found`}
@@ -701,7 +1031,6 @@ export default function DoctorsPage() {
             )}
           </div>
 
-          {/* Grid */}
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -726,10 +1055,7 @@ export default function DoctorsPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {doctors.map((doc) => (
-                <DoctorCard key={doc._id} doctor={doc}
-                  onView={setProfileDoc}
-                  onBook={(d) => setProfileDoc(d)}
-                />
+                <DoctorCard key={doc._id} doctor={doc} onView={setProfileDoc} />
               ))}
             </div>
           )}
@@ -739,6 +1065,7 @@ export default function DoctorsPage() {
       <style>{`
         @keyframes scaleIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
         @keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes slideDown { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
     </>
   );

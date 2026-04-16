@@ -1,5 +1,6 @@
 const Appointment = require("../models/Appointment");
 const { publishNotificationEvent } = require("../utils/rabbitmq");
+const { lockSlot, unlockSlot, isSlotLocked } = require("../utils/slotLocker");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -33,24 +34,251 @@ const handleError = (res, error, fallbackMessage = "Internal server error") => {
 //         dateTime, reason, consultationFee }
 // ─────────────────────────────────────────────────────────────────────────────
 
-const bookAppointment = async (req, res) => {
+
+// services/appointment-service/src/controllers/appointmentController.js
+
+
+// ─── NEW: Reserve a slot (creates temporary hold, NOT an appointment) ───
+// POST /api/appointments/reserve
+const reserveSlot = async (req, res) => {
   try {
     const {
-      patientId,
       doctorId,
-      patientName,
       doctorName,
       specialty,
       dateTime,
       reason,
       consultationFee,
+      isForSomeoneElse,
+      bookedFor,
     } = req.body;
 
-    // Basic validation
+    const patientId = req.body.patientId || req.user.id;
+    const patientName = req.body.patientName || req.user.name || "Patient";
+
+    if (!doctorId || !dateTime) {
+      return res.status(400).json({
+        success: false,
+        message: "doctorId and dateTime are required.",
+      });
+    }
+
+    const apptDateTime = new Date(dateTime);
+    if (isNaN(apptDateTime.getTime()) || apptDateTime < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or past date/time.",
+      });
+    }
+
+    // Check if slot is already booked (existing confirmed appointment)
+    const existingAppointment = await Appointment.findOne({
+      doctorId,
+      dateTime: apptDateTime,
+      status: { $in: ["confirmed", "completed"] }, // Only confirmed/completed count
+    });
+
+    if (existingAppointment) {
+      return res.status(409).json({
+        success: false,
+        message: "This time slot is already booked.",
+      });
+    }
+
+    // Check if slot is temporarily locked
+    if (isSlotLocked(doctorId, apptDateTime)) {
+      return res.status(409).json({
+        success: false,
+        message: "This slot is being booked by another patient. Please try another slot.",
+      });
+    }
+
+    // Generate a unique reservation ID
+    const reservationId = `RES_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    
+    // Lock the slot for 10 minutes
+    const locked = lockSlot(doctorId, apptDateTime, reservationId);
+    if (!locked) {
+      return res.status(409).json({
+        success: false,
+        message: "Unable to reserve slot. Please try again.",
+      });
+    }
+
+    // Store reservation data temporarily (in memory or Redis)
+    // For this example, we'll return the reservation data to the frontend
+    // The frontend will pass this to payment service
+    const reservationData = {
+      reservationId,
+      doctorId,
+      doctorName,
+      specialty,
+      patientId,
+      patientName,
+      dateTime: apptDateTime.toISOString(),
+      reason,
+      consultationFee,
+      isForSomeoneElse,
+      bookedFor,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    };
+
+    // Store in a temporary map (could use Redis)
+    if (!global.reservations) global.reservations = new Map();
+    global.reservations.set(reservationId, reservationData);
+    
+    // Auto-cleanup after 10 minutes
+    setTimeout(() => {
+      if (global.reservations?.has(reservationId)) {
+        global.reservations.delete(reservationId);
+        unlockSlot(doctorId, apptDateTime, reservationId);
+        console.log(`🗑️ Reservation ${reservationId} expired`);
+      }
+    }, 10 * 60 * 1000);
+
+    console.log(`🔒 Slot reserved: ${reservationId} for doctor ${doctorId} at ${apptDateTime}`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Slot reserved. Please complete payment within 10 minutes.",
+      reservationId,
+      reservationData,
+      expiresIn: 10 * 60, // seconds
+    });
+
+  } catch (error) {
+    return handleError(res, error, "Failed to reserve slot");
+  }
+};
+
+// ─── NEW: Create appointment AFTER successful payment ───
+// POST /api/appointments/create-from-reservation
+const createAppointmentFromReservation = async (req, res) => {
+  try {
+    const { reservationId, paymentId } = req.body;
+
+    if (!reservationId || !paymentId) {
+      return res.status(400).json({
+        success: false,
+        message: "reservationId and paymentId are required.",
+      });
+    }
+
+    // Get reservation data
+    const reservation = global.reservations?.get(reservationId);
+    if (!reservation) {
+      return res.status(404).json({
+        success: false,
+        message: "Reservation expired or not found. Please book again.",
+      });
+    }
+
+    // Check if appointment already exists (prevent duplicate)
+    const existingAppointment = await Appointment.findOne({
+      doctorId: reservation.doctorId,
+      dateTime: new Date(reservation.dateTime),
+      status: "confirmed",
+    });
+
+    if (existingAppointment) {
+      // Release the lock
+      unlockSlot(reservation.doctorId, reservation.dateTime, reservationId);
+      global.reservations.delete(reservationId);
+      return res.status(409).json({
+        success: false,
+        message: "This slot is no longer available.",
+      });
+    }
+
+    // Calculate patient number
+    const startOfDay = new Date(reservation.dateTime);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(reservation.dateTime);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const dailyCount = await Appointment.countDocuments({
+      doctorId: reservation.doctorId,
+      dateTime: { $gte: startOfDay, $lte: endOfDay },
+      status: "confirmed",
+    });
+    const patientNumber = dailyCount + 1;
+
+    // Create the actual appointment
+    const appointment = new Appointment({
+      patientId: reservation.patientId,
+      doctorId: reservation.doctorId,
+      patientName: reservation.patientName,
+      doctorName: reservation.doctorName,
+      specialty: reservation.specialty,
+      dateTime: new Date(reservation.dateTime),
+      reason: reservation.reason,
+      consultationFee: reservation.consultationFee,
+      status: "confirmed",
+      paymentStatus: "paid",
+      paymentId: paymentId,
+      meetingLink: generateMeetingLink(`${reservation.patientId}-${Date.now()}`),
+      isForSomeoneElse: reservation.isForSomeoneElse,
+      bookedFor: reservation.bookedFor || { name: "", age: null, phone: "", email: "" },
+      patientNumber,
+    });
+
+    await appointment.save();
+
+    // Release the lock and clean up reservation
+    unlockSlot(reservation.doctorId, reservation.dateTime, reservationId);
+    global.reservations.delete(reservationId);
+
+    console.log(`✅ Appointment created from reservation ${reservationId}`);
+
+    // Publish notification
+    publishNotificationEvent("APPOINTMENT_BOOKED", {
+      appointmentId: appointment._id.toString(),
+      patientId: reservation.patientId,
+      doctorId: reservation.doctorId,
+      patientName: reservation.patientName,
+      doctorName: reservation.doctorName,
+      specialty: reservation.specialty,
+      dateTime: reservation.dateTime,
+      reason: reservation.reason,
+      patientNumber,
+      meetingLink: appointment.meetingLink,
+      isForSomeoneElse: reservation.isForSomeoneElse,
+      patientEmail: reservation.isForSomeoneElse ? reservation.bookedFor?.email : "",
+    }).catch((err) => console.warn("Notification failed:", err.message));
+
+    return res.status(201).json({
+      success: true,
+      message: "Appointment confirmed successfully!",
+      appointment,
+    });
+
+  } catch (error) {
+    return handleError(res, error, "Failed to create appointment");
+  }
+};
+
+// Keep other functions but remove the old bookAppointment
+// Update the routes to use these new functions
+/*const bookAppointment = async (req, res) => {
+  try {
+    const {
+      doctorId,
+      doctorName,
+      specialty,
+      dateTime,
+      reason,
+      consultationFee,
+      isForSomeoneElse,
+      bookedFor,
+    } = req.body;
+
+    const patientId = req.body.patientId || req.user.id;
+    const patientName = req.body.patientName || req.user.name || "Patient";
+
     if (!patientId || !doctorId || !dateTime) {
       return res.status(400).json({
         success: false,
-        message: "patientId, doctorId, and dateTime are required.",
+        message: "doctorId and dateTime are required.",
       });
     }
 
@@ -69,7 +297,7 @@ const bookAppointment = async (req, res) => {
       });
     }
 
-    // Check for conflicting appointment (same doctor, same slot, not cancelled/rejected)
+    // Check for conflicting appointment
     const conflict = await Appointment.findOne({
       doctorId,
       dateTime: apptDateTime,
@@ -83,7 +311,21 @@ const bookAppointment = async (req, res) => {
       });
     }
 
-    // Create appointment
+    // Calculate Patient Number
+    const startOfDay = new Date(apptDateTime);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(apptDateTime);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const dailyCount = await Appointment.countDocuments({
+      doctorId,
+      dateTime: { $gte: startOfDay, $lte: endOfDay },
+      status: { $nin: ["cancelled", "rejected"] },
+    });
+    const patientNumber = dailyCount + 1;
+
+    const hasFee = consultationFee > 0;
+    
     const appointment = new Appointment({
       patientId,
       doctorId,
@@ -93,37 +335,47 @@ const bookAppointment = async (req, res) => {
       dateTime: apptDateTime,
       reason: reason || "",
       consultationFee: consultationFee || 0,
-      status: "pending",
-      meetingLink: generateMeetingLink(new Date().getTime()),
+      status: hasFee ? "pending" : "confirmed",  // pending = awaiting payment
+      paymentStatus: hasFee ? "unpaid" : "paid", // unpaid = not paid yet
+      meetingLink: hasFee ? "" : generateMeetingLink(`${patientId}-${Date.now()}`),
+      isForSomeoneElse: !!isForSomeoneElse,
+      bookedFor: bookedFor || { name: "", age: null, phone: "", email: "" },
+      patientNumber,
     });
 
     await appointment.save();
 
-    // ── Publish APPOINTMENT_BOOKED to notification-service via RabbitMQ ──────
-    // Fire-and-forget: appointment is saved regardless of queue state
-    publishNotificationEvent("APPOINTMENT_BOOKED", {
-      appointmentId: appointment._id.toString(),
-      patientId,
-      doctorId,
-      patientName: patientName || "",
-      doctorName: doctorName || "",
-      specialty: specialty || "",
-      dateTime: apptDateTime.toISOString(),
-      reason: reason || "",
-    }).catch((err) =>
-      console.warn("Non-critical: Failed to publish APPOINTMENT_BOOKED:", err.message)
-    );
+    // Only publish notification if appointment is confirmed (free)
+    if (!hasFee) {
+      publishNotificationEvent("APPOINTMENT_BOOKED", {
+        appointmentId: appointment._id.toString(),
+        patientId,
+        doctorId,
+        patientName: patientName || "",
+        doctorName: doctorName || "",
+        specialty: specialty || "",
+        dateTime: apptDateTime.toISOString(),
+        reason: reason || "",
+        patientNumber,
+        meetingLink: appointment.meetingLink,
+        isForSomeoneElse: !!isForSomeoneElse,
+        patientEmail: isForSomeoneElse ? bookedFor?.email : (req.user?.email || ""),
+      }).catch((err) =>
+        console.warn("Non-critical: Failed to publish APPOINTMENT_BOOKED:", err.message)
+      );
+    }
 
     return res.status(201).json({
       success: true,
-      message: "Appointment booked successfully.",
+      message: hasFee 
+        ? "Appointment created. Please complete payment to confirm."
+        : "Appointment booked successfully.",
       appointment,
     });
   } catch (error) {
     return handleError(res, error, "Failed to book appointment");
   }
-};
-
+};*/
 // ─────────────────────────────────────────────────────────────────────────────
 // READ — Patient: Upcoming
 // GET /api/appointments/patient/upcoming
@@ -381,6 +633,9 @@ const cancelAppointment = async (req, res) => {
     }
 
     appointment.status = "cancelled";
+    if (req.body.reason) {
+      appointment.cancellationReason = req.body.reason;
+    }
     await appointment.save();
 
     return res.status(200).json({
@@ -410,11 +665,7 @@ const updateAppointmentPayment = async (req, res) => {
       });
     }
 
-    const appointment = await Appointment.findByIdAndUpdate(
-      req.params.id,
-      { $set: { paymentId, paymentStatus } },
-      { new: true }
-    );
+    const appointment = await Appointment.findById(req.params.id);
 
     if (!appointment) {
       return res.status(404).json({
@@ -423,14 +674,64 @@ const updateAppointmentPayment = async (req, res) => {
       });
     }
 
+    // ✅ If payment is successful, confirm the appointment
+    if (paymentStatus === "paid" && appointment.status === "pending" && appointment.paymentStatus === "unpaid") {
+      appointment.status = "confirmed";
+      appointment.paymentStatus = "paid";
+      appointment.paymentId = paymentId;
+      
+      // Generate meeting link for confirmed appointment
+      if (!appointment.meetingLink) {
+        appointment.meetingLink = generateMeetingLink(appointment._id.toString());
+      }
+      
+      await appointment.save();
+      
+      // Publish notification for confirmed appointment
+      publishNotificationEvent("APPOINTMENT_BOOKED", {
+        appointmentId: appointment._id.toString(),
+        patientId: appointment.patientId,
+        doctorId: appointment.doctorId,
+        patientName: appointment.patientName,
+        doctorName: appointment.doctorName,
+        specialty: appointment.specialty,
+        dateTime: appointment.dateTime.toISOString(),
+        reason: appointment.reason,
+        patientNumber: appointment.patientNumber,
+        meetingLink: appointment.meetingLink,
+        isForSomeoneElse: appointment.isForSomeoneElse,
+        patientEmail: appointment.isForSomeoneElse ? appointment.bookedFor?.email : "",
+      }).catch((err) =>
+        console.warn("Non-critical: Failed to publish appointment confirmation:", err.message)
+      );
+      
+      return res.status(200).json({ 
+        success: true, 
+        message: "Payment confirmed! Appointment has been scheduled.",
+        appointment 
+      });
+    }
+    
+    // Otherwise just update payment status (for failed/refunded scenarios)
+    if (paymentStatus === "paid") {
+      appointment.paymentStatus = "paid";
+    } else if (paymentStatus === "failed") {
+      appointment.paymentStatus = "unpaid"; // Keep as unpaid if failed
+    } else if (paymentStatus === "refunded") {
+      appointment.paymentStatus = "refunded";
+    }
+    
+    appointment.paymentId = paymentId;
+    await appointment.save();
+
     return res.status(200).json({ success: true, appointment });
   } catch (error) {
     return handleError(res, error, "Failed to update appointment payment");
   }
 };
-
 module.exports = {
-  bookAppointment,
+  reserveSlot,
+  createAppointmentFromReservation,
   getPatientUpcoming,
   getPatientPast,
   getAppointmentsByPatient,

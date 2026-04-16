@@ -29,7 +29,6 @@ function getInitials(name = "") {
   return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "DR";
 }
 
-// ✅ Only confirmed/completed statuses (paid appointments)
 const STATUS_STYLES = {
   confirmed: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500", label: "Confirmed" },
   completed: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500", label: "Completed" },
@@ -112,7 +111,6 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
       
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-[scaleIn_0.2s_ease-out]">
-        {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white relative">
           <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,9 +130,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
           </div>
         </div>
 
-        {/* Content */}
         <div className="p-8 space-y-8">
-          {/* Status and Time Row */}
           <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between bg-slate-50 p-5 rounded-2xl border border-slate-100">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">When</p>
@@ -151,7 +147,6 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
             </div>
           </div>
 
-          {/* Fee Display - Already Paid */}
           {appt.consultationFee > 0 && (
             <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100">
               <span className="text-sm font-semibold text-gray-700">Amount Paid</span>
@@ -159,7 +154,6 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
             </div>
           )}
 
-          {/* Reason for Visit */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -174,7 +168,6 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
             </div>
           </div>
 
-          {/* Guest Info if applicable */}
           {appt.isForSomeoneElse && appt.bookedFor?.name && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -191,11 +184,9 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
             </div>
           )}
 
-          {/* Actions */}
           <div className="space-y-3 pt-2">
             {cancelStep === "view" ? (
               <>
-                {/* Join Meeting for confirmed appointments */}
                 {status === "confirmed" && appt.meetingLink && (
                   <button 
                     onClick={handleJoinMeeting}
@@ -284,7 +275,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STAT CARD COMPONENT
+// STAT CARD COMPONENT (Matching Dashboard)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STAT_THEME = {
@@ -313,35 +304,22 @@ function StatCard({ label, value, icon, color, loading }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN DASHBOARD PAGE - Only shows PAID/Confirmed appointments
+// MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function PatientDashboard() {
+export default function AppointmentsPage() {
   const router = useRouter();
 
-  const [user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(null);
   const [selectedAppt, setSelectedAppt] = useState(null);
   const [error, setError] = useState("");
 
-  // Bootstrap user from localStorage
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("user");
-      const tok = localStorage.getItem("token");
-      if (!tok) { router.replace("/login"); return; }
-      if (raw) setUser(JSON.parse(raw));
-    } catch (_) { router.replace("/login"); }
-  }, [router]);
-
-  // Fetch ONLY confirmed/completed appointments (paid appointments)
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      // Fetch both upcoming and past, then filter for confirmed/completed only
       const [upRes, pastRes] = await Promise.allSettled([
         axios.get(`${API_BASE}/appointments/patient/upcoming`, { headers: authHeaders() }),
         axios.get(`${API_BASE}/appointments/patient/past`, { headers: authHeaders() }),
@@ -357,12 +335,10 @@ export default function PatientDashboard() {
         all = [...all, ...pastData];
       }
       
-      // ✅ FILTER: Only show confirmed or completed appointments (paid)
       const paidAppointments = all.filter(a => 
         a.status === "confirmed" || a.status === "completed"
       );
       
-      // Sort by date (newest first)
       paidAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
       setAppointments(paidAppointments);
     } catch (err) {
@@ -377,12 +353,11 @@ export default function PatientDashboard() {
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // Cancel appointment
   const handleCancel = async (id, reason) => {
     setCancelling(id);
     try {
       await axios.put(`${API_BASE}/appointments/${id}/cancel`, { reason }, { headers: authHeaders() });
-      await fetchAppointments(); // Refresh list
+      await fetchAppointments();
       setSelectedAppt(null);
     } catch (err) {
       setError("Failed to cancel. Please try again.");
@@ -391,7 +366,6 @@ export default function PatientDashboard() {
     }
   };
 
-  // Split appointments into upcoming and past
   const now = new Date();
   const upcoming = appointments.filter(a => {
     const aptDate = new Date(a.dateTime);
@@ -403,20 +377,11 @@ export default function PatientDashboard() {
     return aptDate < now || a.status === "cancelled" || a.status === "rejected";
   }).sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
 
-  const firstName = user?.name?.split(" ")[0] || "there";
-  const today = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-
-  // Stats based on confirmed appointments only
-  const todayCount = upcoming.filter((a) => {
-    const d = new Date(a.dateTime);
-    return d.toDateString() === now.toDateString();
-  }).length;
-  
   const totalUpcoming = upcoming.length;
-  const totalCompleted = past.filter(a => a.status === "completed").length;
+  const totalPast = past.length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50/50 to-blue-50/20">
+    <div className="min-h-screen bg-gray-50">
       
       <AppointmentDetailModal 
         open={!!selectedAppt}
@@ -426,62 +391,56 @@ export default function PatientDashboard() {
         cancelling={cancelling}
       />
 
-      {/* Hero header */}
-      <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-cyan-600 px-4 sm:px-6 pt-10 pb-28 relative overflow-hidden">
+      {/* Header - Matching Dashboard */}
+      <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-cyan-600 px-4 sm:px-6 pt-10 pb-16 relative overflow-hidden">
         <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-white/5 blur-2xl" />
         <div className="absolute bottom-0 left-10 w-32 h-32 rounded-full bg-cyan-400/10 blur-xl" />
 
-        <div className="relative max-w-5xl mx-auto flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <p className="text-blue-300 text-xs font-semibold uppercase tracking-widest mb-1">{today}</p>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">
-              Hello, {firstName}! 👋
-            </h1>
-            <p className="text-blue-200 text-sm mt-1.5">
-              {totalUpcoming > 0
-                ? `You have ${totalUpcoming} confirmed appointment${totalUpcoming !== 1 ? "s" : ""}`
-                : "No appointments scheduled — book one today"
-              }
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button onClick={fetchAppointments} disabled={loading}
-              className="p-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-colors" title="Refresh">
-              <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-              </svg>
-            </button>
+        <div className="relative max-w-5xl mx-auto">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white">My Appointments</h1>
+              <p className="text-blue-200 text-sm mt-1">All your confirmed healthcare appointments</p>
+            </div>
             <Link href="/doctors"
-              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-blue-600 text-sm font-bold
-                hover:bg-blue-50 shadow-lg shadow-blue-900/20 transition-colors">
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-blue-600 text-sm font-bold hover:bg-blue-50 shadow-lg transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/>
               </svg>
-              Book Appointment
+              Book New
             </Link>
+          </div>
+
+          {/* Stats Cards - Matching Dashboard style */}
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <StatCard 
+              loading={loading} 
+              label="Upcoming" 
+              value={totalUpcoming} 
+              color="blue"
+              icon={
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+              }
+            />
+            <StatCard 
+              loading={loading} 
+              label="Past" 
+              value={totalPast} 
+              color="purple"
+              icon={
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              }
+            />
           </div>
         </div>
       </div>
 
-      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 -mt-16 pb-12 space-y-6">
-
-        {/* Stat cards - Only showing confirmed appointment stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <StatCard loading={loading} label="Confirmed" value={totalUpcoming} color="blue"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>}
-          />
-          <StatCard loading={loading} label="Today" value={todayCount} color="green"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>}
-          />
-          <StatCard loading={loading} label="Completed" value={totalCompleted} color="purple"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>}
-          />
-          <StatCard loading={loading} label="Total" value={appointments.length} color="amber"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>}
-          />
-        </div>
-
+      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 -mt-8 pb-12 space-y-6">
+        
         {/* Error banner */}
         {error && (
           <div className="flex items-center gap-2.5 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
@@ -493,7 +452,7 @@ export default function PatientDashboard() {
           </div>
         )}
 
-        {/* Upcoming Appointments Section */}
+        {/* Upcoming Appointments Section - Matching Dashboard style */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-blue-50/40">
             <div>
@@ -507,12 +466,11 @@ export default function PatientDashboard() {
               </h2>
               <p className="text-xs text-gray-400 mt-0.5">Confirmed & paid appointments</p>
             </div>
-            <Link href="/appointments"
-              className="text-xs text-blue-600 font-bold hover:underline">
-              View All →
-            </Link>
+            {totalUpcoming > 5 && (
+              <span className="text-xs text-gray-400 font-medium">Showing {Math.min(5, totalUpcoming)} of {totalUpcoming}</span>
+            )}
           </div>
-          <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+          <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
             {loading ? (
               [1,2,3].map((i) => (
                 <div key={i} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 animate-pulse">
@@ -533,31 +491,44 @@ export default function PatientDashboard() {
                 </Link>
               </div>
             ) : (
-              upcoming.slice(0, 5).map((appt) => (
+              upcoming.map((appt) => (
                 <AppointmentCard key={appt._id} appt={appt} onClick={setSelectedAppt} />
               ))
             )}
           </div>
         </div>
 
-        {/* Quick actions */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-bold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: "Find a Doctor",    href: "/doctors",            emoji: "🔍", from: "from-blue-50",   to: "to-blue-100",   border: "border-blue-200",   hover: "hover:border-blue-300"   },
-              { label: "My Appointments",  href: "/appointments",        emoji: "📅", from: "from-green-50",  to: "to-green-100",  border: "border-green-200",  hover: "hover:border-green-300"  },
-              { label: "My Profile",       href: "/dashboard/profile",   emoji: "👤", from: "from-purple-50", to: "to-purple-100", border: "border-purple-200", hover: "hover:border-purple-300" },
-              { label: "Medical Records",  href: "/dashboard/reports",   emoji: "📋", from: "from-amber-50",  to: "to-amber-100",  border: "border-amber-200",  hover: "hover:border-amber-300"  },
-            ].map(({ label, href, emoji, from, to, border, hover }) => (
-              <Link key={label} href={href}
-                className={`flex flex-col items-center justify-center gap-2.5 py-5 rounded-2xl
-                  bg-gradient-to-b ${from} ${to} border ${border} ${hover}
-                  transition-all hover:shadow-md hover:-translate-y-0.5 text-center`}>
-                <span className="text-2xl">{emoji}</span>
-                <span className="text-xs font-semibold text-gray-700 leading-tight">{label}</span>
-              </Link>
-            ))}
+        {/* Past Appointments Section - Matching Dashboard style */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/60">
+            <div>
+              <h2 className="text-sm font-bold text-gray-900">Past Appointments</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Completed & history</p>
+            </div>
+            {past.length > 0 && <span className="text-xs text-gray-400 font-medium">{past.length} total</span>}
+          </div>
+          <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+            {loading ? (
+              [1,2].map((i) => (
+                <div key={i} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 animate-pulse">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 w-32 bg-gray-200 rounded" />
+                    <div className="h-2.5 w-48 bg-gray-100 rounded" />
+                  </div>
+                </div>
+              ))
+            ) : past.length === 0 ? (
+              <div className="flex flex-col items-center py-10 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-2xl mb-3">📋</div>
+                <p className="text-sm font-semibold text-gray-700">No past appointments</p>
+                <p className="text-xs text-gray-400 mt-1">Your completed appointments will appear here</p>
+              </div>
+            ) : (
+              past.slice(0, 10).map((appt) => (
+                <AppointmentCard key={appt._id} appt={appt} onClick={setSelectedAppt} />
+              ))
+            )}
           </div>
         </div>
 
