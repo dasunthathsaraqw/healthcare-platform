@@ -1,0 +1,27 @@
+# .dockerignore for telemedicine-service
+# Prevents these from being sent to the Docker build context.
+# Keeps image lean and avoids leaking secrets.
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Secrets — never bake into image
+.env
+.env.local
+
+# VCS
+.git/
+.gitignore
+
+# IDE / OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test artifacts
+coverage/
+*.test.js
+*.spec.js
