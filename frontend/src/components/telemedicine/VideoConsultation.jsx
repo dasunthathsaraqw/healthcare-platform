@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import AgoraRTC from "agora-rtc-sdk-ng";
+import ChatPanel from "./ChatPanel";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
@@ -47,12 +48,13 @@ const STATUS_CONFIG = {
   },
 };
 
-export default function VideoConsultation({ appointmentId, onLeave, userRole = "patient" }) {
+export default function VideoConsultation({ appointmentId, onLeave, userRole = "patient", doctorName = "Doctor" }) {
   const [callStatus, setCallStatus] = useState(CALL_STATUS.CONNECTING);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [error, setError] = useState("");
   const [remoteUserJoined, setRemoteUserJoined] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   
   const clientRef = useRef(null);
   const localAudioTrackRef = useRef(null);
@@ -278,20 +280,38 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
 
   const statusConfig = STATUS_CONFIG[callStatus] || STATUS_CONFIG[CALL_STATUS.CONNECTING];
 
+  const otherParty = userRole === "doctor" ? "Patient" : doctorName;
+
   return (
     <div className="h-full flex flex-col bg-gray-900">
       {/* Status Bar */}
-      <div className="bg-gray-800 px-4 py-2 flex items-center justify-between">
+      <div className="bg-gray-800 px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <span className={`inline-block w-2 h-2 rounded-full ${statusConfig.dot} ${callStatus === CALL_STATUS.CONNECTING ? 'animate-pulse' : ''}`} />
           <span className={`text-xs font-medium px-2 py-1 rounded-full border ${statusConfig.color}`}>
             {statusConfig.label}
           </span>
         </div>
-        <div className="text-xs text-gray-400">
-          {userRole === "doctor" ? "Doctor View" : "Patient View"}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400">{userRole === "doctor" ? "Doctor View" : "Patient View"}</span>
+          {/* Chat toggle */}
+          <button
+            onClick={() => setChatOpen((o) => !o)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              chatOpen ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+            }`}
+            title="Toggle Chat"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+            Chat
+          </button>
         </div>
       </div>
+
+      {/* Main content: Video + optional Chat */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
 
       {/* Video Area */}
       <div className="flex-1 relative bg-black">
@@ -359,6 +379,19 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
           </div>
         )}
       </div>
+
+      {/* Chat Side Panel */}
+      {chatOpen && (
+        <div className="w-80 shrink-0 flex flex-col border-l border-gray-700">
+          <ChatPanel
+            appointmentId={appointmentId}
+            otherPartyName={otherParty}
+            className="flex-1 h-full"
+          />
+        </div>
+      )}
+
+      </div>{/* end main content row */}
 
       {/* Call Controls */}
       <div className="bg-gray-800 px-4 py-4">

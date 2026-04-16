@@ -75,14 +75,19 @@ app.get("/", (_req, res) => {
       "PATCH  /api/telemedicine/sessions/:id/cancel",
       "PATCH  /api/telemedicine/sessions/:id/notes",
       "GET    /api/telemedicine/sessions/:id",
+      "GET    /api/telemedicine/chat/:appointmentId",
+      "POST   /api/telemedicine/chat/:appointmentId",
+      "GET    /api/telemedicine/chat/:appointmentId/unread",
+      "PATCH  /api/telemedicine/chat/:appointmentId/read",
     ],
   });
 });
 
 // ── Feature Routes ─────────────────────────────────────────────────────────────
 // All session endpoints live under /api/telemedicine/sessions.
-// To add a new resource (e.g. recordings): app.use("/api/telemedicine/recordings", ...)
+// Chat endpoints live under /api/telemedicine/chat.
 app.use("/api/telemedicine/sessions", require("./routes/sessionRouter"));
+app.use("/api/telemedicine/chat",     require("./routes/chatRouter"));
 
 // ── 404 Handler ────────────────────────────────────────────────────────────────
 // Catches any request that didn't match a real route above.

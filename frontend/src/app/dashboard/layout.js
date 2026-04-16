@@ -110,6 +110,7 @@ const NAV_SECTIONS = [
 // ── Breadcrumb map ────────────────────────────────────────────────────────────
 const BREADCRUMB_MAP = {
   "/dashboard": "Dashboard",
+  "/dashboard/telemedicine": "Telemedicine",
   "/dashboard/reports": "Medical Vault",
   "/dashboard/metrics": "Health Metrics",
   "/dashboard/profile": "My Profile",
