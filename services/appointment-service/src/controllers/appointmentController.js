@@ -679,45 +679,67 @@ const updateAppointmentStatus = async (req, res) => {
 
 const cancelAppointment = async (req, res) => {
   try {
+    const { reason } = req.body;
     const appointment = await Appointment.findById(req.params.id);
 
     if (!appointment) {
-      return res.status(404).json({
-        success: false,
-        message: "Appointment not found.",
+      return res.status(404).json({ success: false, message: "Appointment not found" });
+    }
+
+    // Only confirmed appointments can be cancelled
+    if (appointment.status !== "confirmed") {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Only confirmed appointments can be cancelled" 
       });
     }
 
-    // Only the owning patient or an admin can cancel
-    const requesterId = req.user.id;
-    if (
-      appointment.patientId !== requesterId &&
-      req.user.role !== "admin"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "You can only cancel your own appointments.",
-      });
+    // Calculate hours before appointment
+    const hoursBefore = (appointment.dateTime - new Date()) / (1000 * 60 * 60);
+    
+    // Calculate refund amount based on time
+    let refundAmount = 0;
+    let refundPercentage = 0;
+    
+    if (hoursBefore >= 24) {
+      refundPercentage = 100;
+      refundAmount = appointment.consultationFee;
+    } else if (hoursBefore >= 12) {
+      refundPercentage = 50;
+      refundAmount = appointment.consultationFee * 0.5;
+    } else if (hoursBefore >= 6) {
+      refundPercentage = 25;
+      refundAmount = appointment.consultationFee * 0.25;
+    } else {
+      refundPercentage = 0;
+      refundAmount = 0;
     }
 
-    if (["completed", "cancelled", "rejected"].includes(appointment.status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot cancel an appointment that is already ${appointment.status}.`,
-      });
-    }
-
-    appointment.status = "cancelled";
-    if (req.body.reason) {
-      appointment.cancellationReason = req.body.reason;
-    }
+    // Update appointment
+    appointment.status = "cancellation_requested";
+    appointment.cancellationReason = reason;
+    appointment.cancelledAt = new Date();
+    appointment.refundRequested = true;
+    appointment.refundAmount = refundAmount;
+    appointment.refundRequestedAt = new Date();
+    
     await appointment.save();
+
+    // TODO: Send email to admin (you can implement this later)
+    console.log(`📧 Refund request for appointment ${appointment._id}: Rs. ${refundAmount} (${refundPercentage}%)`);
+    console.log(`   Reason: ${reason}`);
 
     return res.status(200).json({
       success: true,
-      message: "Appointment cancelled successfully.",
+      message: refundAmount > 0 
+        ? `Cancellation request submitted. Refund of Rs. ${refundAmount} (${refundPercentage}%) pending admin approval.`
+        : "Appointment cancelled. No refund applicable.",
       appointment,
+      refundAmount,
+      refundPercentage,
+      requiresAdminApproval: refundAmount > 0
     });
+
   } catch (error) {
     return handleError(res, error, "Failed to cancel appointment");
   }
@@ -804,6 +826,161 @@ const updateAppointmentPayment = async (req, res) => {
     return handleError(res, error, "Failed to update appointment payment");
   }
 };
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN — Get all cancellation requests
+// GET /api/appointments/admin/cancellation-requests
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN — Get all cancellation requests
+// GET /api/appointments/admin/cancellation-requests
+// ─────────────────────────────────────────────────────────────────────────────
+
+const getCancellationRequests = async (req, res) => {
+  try {
+    const requests = await Appointment.find({
+      status: "cancellation_requested",
+      refundRequested: true,
+      refundProcessedAt: null
+    }).sort({ refundRequestedAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: requests.length,
+      requests,
+    });
+  } catch (error) {
+    return handleError(res, error, "Failed to fetch cancellation requests");
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN — Process refund (mark as completed)
+// PUT /api/appointments/admin/cancellation-requests/:id/process
+// ─────────────────────────────────────────────────────────────────────────────
+
+const processRefundRequest = async (req, res) => {
+  try {
+    const { adminNotes, refundReference } = req.body;
+    const appointment = await Appointment.findById(req.params.id);
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
+
+    if (appointment.status !== "cancellation_requested") {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot process refund for appointment with status: ${appointment.status}`,
+      });
+    }
+
+    appointment.status = "cancelled";
+    appointment.refundProcessedAt = new Date();
+    appointment.refundProcessedBy = "admin"; // Set static value since no auth
+    appointment.adminNotes = adminNotes || null;
+    appointment.refundReference = refundReference || null;
+    
+    await appointment.save();
+
+    console.log(`✅ Refund processed for appointment ${appointment._id}: Rs. ${appointment.refundAmount}`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Refund marked as processed successfully",
+      appointment,
+    });
+  } catch (error) {
+    console.error("processRefundRequest error:", error);
+    return handleError(res, error, "Failed to process refund");
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN — Reject cancellation request (no refund)
+// PUT /api/appointments/admin/cancellation-requests/:id/reject
+// ─────────────────────────────────────────────────────────────────────────────
+
+const rejectCancellationRequest = async (req, res) => {
+  try {
+    const { rejectionReason } = req.body;
+    const appointment = await Appointment.findById(req.params.id);
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
+
+    if (appointment.status !== "cancellation_requested") {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot reject request for appointment with status: ${appointment.status}`,
+      });
+    }
+
+    // Revert to confirmed status (cancellation rejected)
+    appointment.status = "confirmed";
+    appointment.refundRequested = false;
+    appointment.adminNotes = rejectionReason || "Cancellation request rejected by admin";
+    appointment.cancellationReason = null;
+    
+    await appointment.save();
+
+    console.log(`❌ Cancellation rejected for appointment ${appointment._id}`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Cancellation request rejected. Appointment remains confirmed.",
+      appointment,
+    });
+  } catch (error) {
+    console.error("rejectCancellationRequest error:", error);
+    return handleError(res, error, "Failed to reject cancellation request");
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN — Get cancellation history (processed & rejected)
+// GET /api/appointments/admin/cancellation-history
+// ─────────────────────────────────────────────────────────────────────────────
+
+const getCancellationHistory = async (req, res) => {
+  try {
+    // Get processed refunds (cancelled with refundProcessedAt)
+    const processedRefunds = await Appointment.find({
+      status: "cancelled",
+      refundProcessedAt: { $ne: null }
+    }).sort({ refundProcessedAt: -1 });
+
+    // Get rejected cancellations (confirmed with adminNotes containing rejection)
+    const rejectedCancellations = await Appointment.find({
+      status: "confirmed",
+      refundRequested: true,
+      adminNotes: { $exists: true, $ne: null }
+    }).sort({ updatedAt: -1 });
+
+    // Combine and sort by date
+    const history = [...processedRefunds, ...rejectedCancellations].sort(
+      (a, b) => new Date(b.refundProcessedAt || b.updatedAt) - new Date(a.refundProcessedAt || a.updatedAt)
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: history.length,
+      history,
+    });
+  } catch (error) {
+    return handleError(res, error, "Failed to fetch cancellation history");
+  }
+};
 module.exports = {
   reserveSlot,
   createAppointmentFromReservation,
@@ -816,4 +993,8 @@ module.exports = {
   updateAppointmentStatus,
   cancelAppointment,
   updateAppointmentPayment,
+  getCancellationRequests,
+  processRefundRequest,
+  rejectCancellationRequest,
+  getCancellationHistory
 };

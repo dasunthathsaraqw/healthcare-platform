@@ -34,7 +34,7 @@ const STATUS_STYLES = {
   confirmed: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500", label: "Confirmed" },
   completed: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500", label: "Completed" },
   cancelled: { bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200", dot: "bg-gray-400", label: "Cancelled" },
-  rejected: { bg: "bg-red-50", text: "text-red-600", border: "border-red-200", dot: "bg-red-400", label: "Rejected" },
+  rejected:  { bg: "bg-red-50",   text: "text-red-600",  border: "border-red-200",   dot: "bg-red-400",   label: "Rejected"  },
   cancellation_requested: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500", label: "Cancellation Requested" },
 };
 
@@ -242,7 +242,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                 <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
                   <p className="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-2">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                     Refund Policy
                   </p>
@@ -283,7 +283,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                     className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-200 transition-all resize-none h-24"
                   />
                 </div>
-
+                
                 <div className="flex gap-3">
                   <button
                     onClick={() => setCancelStep("view")}
@@ -404,12 +404,12 @@ export default function PatientDashboard() {
         const pastData = pastRes.value.data.appointments || pastRes.value.data || [];
         all = [...all, ...pastData];
       }
-
+      
       // Filter: Show confirmed, completed, or cancellation_requested
-      const validAppointments = all.filter(a =>
+      const validAppointments = all.filter(a => 
         a.status === "confirmed" || a.status === "completed" || a.status === "cancellation_requested"
       );
-
+      
       validAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
       setAppointments(validAppointments);
     } catch (err) {
@@ -429,14 +429,14 @@ export default function PatientDashboard() {
     setCancelling(id);
     try {
       const response = await axios.put(`${API_BASE}/appointments/${id}/cancel`, { reason }, { headers: authHeaders() });
-
+      
       // Show appropriate message based on refund eligibility
       if (response.data.refundAmount > 0) {
         alert(`Cancellation request submitted!\n\nRefund Amount: Rs. ${response.data.refundAmount} (${response.data.refundPercentage}%)\n\nYour request has been sent to admin for approval. You will receive the refund within 3-5 business days after approval.`);
       } else {
         alert(`Appointment cancelled successfully.\n\nNo refund applicable for this cancellation.`);
       }
-
+      
       await fetchAppointments();
       setSelectedAppt(null);
     } catch (err) {
@@ -539,7 +539,7 @@ export default function PatientDashboard() {
             icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>}
           />
           <StatCard loading={loading} label="Pending Cancellations" value={pendingCancellations} color="amber"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>}
           />
         </div>
 
@@ -559,7 +559,7 @@ export default function PatientDashboard() {
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
             <div className="flex items-start gap-3">
               <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
               <div>
                 <p className="text-sm font-bold text-amber-800">Cancellation Request Pending</p>
