@@ -12,6 +12,18 @@ function authHeaders() {
   return { Authorization: `Bearer ${t}` };
 }
 
+function getJoinErrorMessage(err) {
+  const apiMessage = err?.response?.data?.message || err?.response?.data?.error;
+  if (apiMessage) return apiMessage;
+
+  const sdkMessage = err?.message || "";
+  if (/permission|notallowed|denied/i.test(sdkMessage)) {
+    return "Camera or microphone permission was denied. Please allow access and try again.";
+  }
+
+  return sdkMessage || "Failed to join video call";
+}
+
 const CALL_STATUS = {
   CONNECTING: "connecting",
   WAITING: "waiting",
@@ -71,16 +83,20 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
       setCallStatus(CALL_STATUS.CONNECTING);
       setError("");
 
-      // Get session data from backend
-      const response = await axios.get(
-        `${API_BASE}/telemedicine/session/${appointmentId}`,
+      // Get Agora credentials from backend via the join endpoint
+      // Passing uid: 0 ensures Agora assigns a unique user ID, preventing collisions
+      const response = await axios.post(
+        `${API_BASE}/telemedicine/sessions/${appointmentId}/join`,
+        { uid: 0 },
         { headers: authHeaders() }
       );
       
-      const { appId, channelName, token, uid } = response.data;
+      // API returns { success, data: { appId, channelName, token, uid, ... } }
+      const sessionData = response.data?.data || response.data;
+      const { appId, channelName, token, uid } = sessionData;
       
       if (!appId || !channelName || !token) {
-        throw new Error("Invalid session data received");
+        throw new Error("Invalid session data from server");
       }
 
       // Create Agora client
@@ -121,7 +137,7 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
       
     } catch (err) {
       console.error("Failed to initialize session:", err);
-      setError(err.message || "Failed to join video call");
+      setError(getJoinErrorMessage(err));
       setCallStatus(CALL_STATUS.ERROR);
     }
   }, [appointmentId]);
@@ -135,6 +151,8 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
         
         if (remoteVideoRef.current) {
           remoteVideoTrack.play(remoteVideoRef.current);
+        } else {
+          console.error("remoteVideoRef is null, cannot play video track");
         }
         
         setRemoteUserJoined(true);
@@ -154,7 +172,8 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
     if (mediaType === "video") {
       if (remoteVideoTrackRef.current) {
         remoteVideoTrackRef.current.stop();
-        remoteVideoTrackRef.current.close();
+        // DO NOT call .close() on remote tracks! Only local tracks.
+        // remoteVideoTrackRef.current.close();
         remoteVideoTrackRef.current = null;
       }
       setRemoteUserJoined(false);
@@ -162,7 +181,7 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
     } else if (mediaType === "audio") {
       if (remoteAudioTrackRef.current) {
         remoteAudioTrackRef.current.stop();
-        remoteAudioTrackRef.current.close();
+        // remoteAudioTrackRef.current.close();
         remoteAudioTrackRef.current = null;
       }
     }
@@ -240,11 +259,11 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
       // Stop remote tracks
       if (remoteAudioTrackRef.current) {
         remoteAudioTrackRef.current.stop();
-        remoteAudioTrackRef.current.close();
+        // remoteAudioTrackRef.current.close(); // Not allowed on remote tracks
       }
       if (remoteVideoTrackRef.current) {
         remoteVideoTrackRef.current.stop();
-        remoteVideoTrackRef.current.close();
+        // remoteVideoTrackRef.current.close(); // Not allowed on remote tracks
       }
 
       // Leave channel and destroy client
@@ -317,14 +336,16 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
       <div className="flex-1 relative bg-black">
         {/* Remote Video (Main) */}
         <div className="absolute inset-0">
-          {remoteUserJoined ? (
-            <div
-              ref={remoteVideoRef}
-              className="w-full h-full"
-              style={{ objectFit: "cover" }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
+          {/* Always render the video container so the ref is immediately available */}
+          <div
+            ref={remoteVideoRef}
+            className={`w-full h-full ${remoteUserJoined ? "block" : "hidden"}`}
+            style={{ objectFit: "cover" }}
+          />
+          
+          {/* Placeholder for when no remote user is joined */}
+          {!remoteUserJoined && (
+            <div className="w-full h-full flex items-center justify-center absolute inset-0 bg-black z-10">
               <div className="text-center">
                 <div className="w-16 h-16 rounded-full bg-gray-800 mx-auto mb-4 flex items-center justify-center">
                   <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

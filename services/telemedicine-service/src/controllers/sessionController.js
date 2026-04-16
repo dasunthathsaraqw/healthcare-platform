@@ -115,12 +115,32 @@ const joinSession = async (req, res) => {
     if (!appointmentId) throw ApiError.badRequest("appointmentId param is required.");
     if (!callerId)      throw ApiError.unauthorized("User ID missing from token.");
 
-    // ── Find session ──────────────────────────────────────────────────────────
-    const session = await sessionService.getSessionByAppointmentId(appointmentId);
+    // ── Find session (auto-create if not yet created) ───────────────────────
+    let session;
+    try {
+      session = await sessionService.getSessionByAppointmentId(appointmentId);
+    } catch (notFoundErr) {
+      if (notFoundErr.statusCode === 404 || notFoundErr.message.includes("No session found")) {
+        const appointment = await getAppointmentById(appointmentId.trim());
+        session = await sessionService.createSession({
+          appointmentId: appointment.appointmentId,
+          patientId:     appointment.patientId,
+          doctorId:      appointment.doctorId,
+          patientName:   appointment.patientName,
+          doctorName:    appointment.doctorName,
+          specialty:     appointment.specialty,
+          scheduledAt:   appointment.scheduledAt,
+          createdBy:     callerId,
+        });
+      } else {
+        throw notFoundErr;
+      }
+    }
 
-    // ── Validate participant ───────────────────────────────────────────────────
+    // Use string comparison to handle ObjectId vs string mismatch
     const isParticipant =
-      session.patientId === callerId || session.doctorId === callerId;
+      String(session.patientId) === String(callerId) ||
+      String(session.doctorId)  === String(callerId);
 
     if (!isParticipant && callerRole !== "admin") {
       throw ApiError.forbidden("You are not a participant in this session.");
@@ -146,8 +166,8 @@ const joinSession = async (req, res) => {
 
     // ── Determine display role ────────────────────────────────────────────────
     const sessionRole =
-      session.doctorId === callerId ? "doctor" :
-      session.patientId === callerId ? "patient" : callerRole;
+      String(session.doctorId) === String(callerId) ? "doctor" :
+      String(session.patientId) === String(callerId) ? "patient" : callerRole;
 
     return res.status(200).json({
       success: true,
