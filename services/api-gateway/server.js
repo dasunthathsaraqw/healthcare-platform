@@ -60,6 +60,11 @@ const handleProxy = (targetUrl, routeName) => (req, res) => {
     },
   };
 
+  // For parsed JSON bodies, let Node set transfer headers instead of forwarding stale browser values.
+  if (!shouldStreamBody) {
+    delete options.headers["content-length"];
+  }
+
   const proxyReq = http.request(options, (proxyRes) => {
     res.status(proxyRes.statusCode);
     // Forward headers from the microservice back to the client
@@ -90,7 +95,6 @@ const handleProxy = (targetUrl, routeName) => (req, res) => {
   // Handle request body
   if (req.body && Object.keys(req.body).length > 0) {
     const body = JSON.stringify(req.body);
-    proxyReq.setHeader("Content-Length", Buffer.byteLength(body));
     proxyReq.write(body);
   }
   proxyReq.end();

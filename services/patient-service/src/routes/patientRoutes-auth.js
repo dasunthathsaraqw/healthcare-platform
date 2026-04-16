@@ -1,6 +1,7 @@
 // src/routes/patientRoutes-auth.js
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const patientController = require('../controllers/patientController');
 const { authenticate, authorize, ROLES } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -119,6 +120,11 @@ router.patch(
 // Kept at the bottom so /:id does not shadow other routes like /admin/... or /metrics via router merging.
 router.get(
   '/:id',
+  (req, res, next) => {
+    // Skip this route for non-ObjectId values so paths like /metrics can be handled by other routers.
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return next('route');
+    next();
+  },
   patientController.getPatientById
 );
 

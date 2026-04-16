@@ -1,14 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import axios from "axios";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
-
-function authHeaders() {
-  const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
-  return { Authorization: `Bearer ${t}` };
-}
+import api from "@/services/api";
 
 // ── Metric Type Config ────────────────────────────────────────────────────────
 
@@ -45,13 +38,21 @@ export default function HealthMetricsPage() {
 
   const activeConfig = METRIC_TYPES.find((t) => t.key === activeType);
 
+  const getArrayFromResponse = (data, key) => {
+    if (Array.isArray(data?.[key])) return data[key];
+    if (Array.isArray(data?.data?.[key])) return data.data[key];
+    if (Array.isArray(data?.data) && key === "data") return data.data;
+    if (Array.isArray(data?.metrics) && key === "metrics") return data.metrics;
+    return [];
+  };
+
   const fetchMetrics = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/patients/metrics?type=${activeType}&days=${days}`, {
-        headers: authHeaders(),
+      const res = await api.get("/patients/metrics", {
+        params: { type: activeType, days },
       });
-      setMetrics(Array.isArray(res.data.metrics) ? res.data.metrics : []);
+      setMetrics(getArrayFromResponse(res.data, "metrics"));
     } catch (err) {
       console.error("Failed to load metrics:", err);
       setMetrics([]);
@@ -62,10 +63,10 @@ export default function HealthMetricsPage() {
 
   const fetchChartMetrics = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/patients/metrics/chart?type=${activeType}&period=${days}`, {
-        headers: authHeaders(),
+      const res = await api.get("/patients/metrics/chart", {
+        params: { type: activeType, period: days },
       });
-      setChartMetrics(Array.isArray(res.data.data) ? res.data.data : []);
+      setChartMetrics(getArrayFromResponse(res.data, "data"));
     } catch (err) {
       console.error("Failed to load chart metrics:", err);
       setChartMetrics([]);
@@ -99,9 +100,9 @@ export default function HealthMetricsPage() {
 
     setSaving(true);
     try {
-      await axios.post(`${API_BASE}/patients/metrics`, {
+      await api.post("/patients/metrics", {
         type: activeType, value, unit, notes,
-      }, { headers: authHeaders() });
+      });
 
       setSuccess("Metric logged successfully!");
       setSystolic(""); setDiastolic(""); setWeightVal(""); setHeartRate(""); setNotes("");
@@ -118,11 +119,11 @@ export default function HealthMetricsPage() {
   const handleDelete = async (id) => {
     if (!confirm("Delete this entry?")) return;
     try {
-      await axios.delete(`${API_BASE}/patients/metrics/${id}`, { headers: authHeaders() });
+      await api.delete(`/patients/metrics/${id}`);
       setMetrics((prev) => prev.filter((m) => m._id !== id));
-      setChartMetrics((prev) => prev.filter((m) => m._id !== id));
       await Promise.all([fetchMetrics(), fetchChartMetrics()]);
-    } catch {
+    } catch (err) {
+      console.error("Failed to delete metric:", err);
       alert("Failed to delete.");
     }
   };
