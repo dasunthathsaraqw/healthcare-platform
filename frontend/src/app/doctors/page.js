@@ -5,7 +5,9 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
-const API_BASE = "http://localhost:8080/api";
+const API_BASE = process.env.NEXT_PUBLIC_DOCTOR_API_URL || "http://localhost:8080/api";
+const API_BASE_APPOINTMENT = process.env.NEXT_PUBLIC_APPOINTMENT_API_URL || "http://localhost:8080/api";
+const API_BASE_PAYMENT = process.env.NEXT_PUBLIC_PAYMENT_API_URL || "http://localhost:8080/api";
 
 function authHeaders() {
   const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -54,12 +56,12 @@ function avatarColor(name = "") {
 }
 
 const SPECIALTY_BADGES = {
-  Cardiologist:        "bg-red-50   text-red-600   border-red-200",
-  Dermatologist:       "bg-pink-50  text-pink-600  border-pink-200",
-  Neurologist:         "bg-purple-50 text-purple-600 border-purple-200",
-  Pediatrician:        "bg-blue-50  text-blue-600  border-blue-200",
-  Gynecologist:        "bg-rose-50  text-rose-600  border-rose-200",
-  Orthopedic:          "bg-orange-50 text-orange-600 border-orange-200",
+  Cardiologist: "bg-red-50   text-red-600   border-red-200",
+  Dermatologist: "bg-pink-50  text-pink-600  border-pink-200",
+  Neurologist: "bg-purple-50 text-purple-600 border-purple-200",
+  Pediatrician: "bg-blue-50  text-blue-600  border-blue-200",
+  Gynecologist: "bg-rose-50  text-rose-600  border-rose-200",
+  Orthopedic: "bg-orange-50 text-orange-600 border-orange-200",
   "General Physician": "bg-green-50 text-green-600 border-green-200",
 };
 
@@ -82,12 +84,12 @@ function ToastContainer({ toasts, removeToast }) {
             animate-[slideUp_.2s_ease-out]
             ${t.type === "success" ? "bg-green-600 text-white" : t.type === "error" ? "bg-red-600 text-white" : "bg-gray-900 text-white"}`}>
           {t.type === "success"
-            ? <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-            : <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/></svg>
+            ? <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+            : <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
           }
           {t.message}
           <button onClick={() => removeToast(t.id)} className="ml-1 opacity-70 hover:opacity-100">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
       ))}
@@ -102,7 +104,7 @@ function ToastContainer({ toasts, removeToast }) {
 
 function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking }) {
   const [reason, setReason] = useState("");
-  const [err, setErr]       = useState("");
+  const [err, setErr] = useState("");
 
   const [guestInfo, setGuestInfo] = useState({
     isForOthers: false,
@@ -148,7 +150,7 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
             <SpecBadge specialty={doctor.specialty} />
           </div>
           <button onClick={onClose} className="ml-auto p-1.5 rounded-lg hover:bg-gray-200 text-gray-400">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
@@ -156,10 +158,10 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
           {/* Booking summary */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              ["Date",     formattedDate],
-              ["Time",     slot.startTime],
+              ["Date", formattedDate],
+              ["Time", slot.startTime],
               ["Duration", `${slot.slotDuration || 30} min`],
-              ["Fee",      doctor.consultationFee ? `Rs. ${doctor.consultationFee}` : "Free"],
+              ["Fee", doctor.consultationFee ? `Rs. ${doctor.consultationFee}` : "Free"],
             ].map(([label, val]) => (
               <div key={label} className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3">
                 <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-0.5">{label}</p>
@@ -228,7 +230,7 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
           {doctor.consultationFee > 0 && (
             <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl">
               <svg className="w-4 h-4 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="text-xs text-amber-700">
                 Consultation fee of <strong>Rs. {doctor.consultationFee}</strong> will be collected via online payment
@@ -246,7 +248,7 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
               className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold
                 disabled:opacity-60 shadow-md shadow-blue-200 flex items-center justify-center gap-2 transition-colors">
               {booking
-                ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Booking…</>
+                ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Booking…</>
                 : "Proceed to Booking"
               }
             </button>
@@ -280,18 +282,18 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
 
         {/* Header */}
         <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-500 flex items-center gap-3">
-  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
-  </div>
-  <div>
-    <p className="text-white font-bold text-base">Complete Payment</p>
-    <p className="text-blue-100 text-xs">Your appointment will be confirmed after payment</p>
-     </div>
+          <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-white font-bold text-base">Complete Payment</p>
+            <p className="text-blue-100 text-xs">Your appointment will be confirmed after payment</p>
+          </div>
           {!paying && (
             <button onClick={onClose} className="ml-auto p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           )}
         </div>
@@ -312,10 +314,10 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
           {/* Appointment details grid */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              ["Date",     formattedDate],
-              ["Time",     slot.startTime],
+              ["Date", formattedDate],
+              ["Time", slot.startTime],
               ["Duration", `${slot.slotDuration || 30} min`],
-              ["Appt ID",  appointmentId ? `#${appointmentId.toString().slice(-6).toUpperCase()}` : "—"],
+              ["Appt ID", appointmentId ? `#${appointmentId.toString().slice(-6).toUpperCase()}` : "—"],
             ].map(([label, val]) => (
               <div key={label} className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3">
                 <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-0.5">{label}</p>
@@ -328,7 +330,7 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
           {bookingInfo?.isForSomeoneElse && bookingInfo?.bookedFor?.name && (
             <div className="flex items-start gap-2 px-4 py-3 bg-purple-50 border border-purple-100 rounded-xl">
               <svg className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               <div>
                 <p className="text-xs font-bold text-purple-700">Booked for {bookingInfo.bookedFor.name}</p>
@@ -366,7 +368,7 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
               {/* PayHere notice */}
               <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl">
                 <svg className="w-4 h-4 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                 </svg>
                 <p className="text-xs text-blue-700">
                   You'll be redirected to <strong>PayHere</strong> to complete your payment securely
@@ -384,13 +386,13 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
                     text-white text-sm font-bold shadow-md shadow-green-200 flex items-center justify-center gap-2 transition-all disabled:opacity-60">
                   {paying ? (
                     <>
-                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
                       Redirecting…
                     </>
                   ) : (
                     <>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                       </svg>
                       Pay Rs. {doctor.consultationFee.toFixed(2)}
                     </>
@@ -403,7 +405,7 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
             <>
               <div className="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-100 rounded-xl">
                 <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-xs text-green-700 font-semibold">
                   This is a free consultation — no payment required!
@@ -435,7 +437,7 @@ function BookingSuccess({ open, doctor, date, slot, onClose, onDashboard }) {
       <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8 text-center animate-[scaleIn_.22s_ease-out]">
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-5">
           <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">Appointment Booked!</h2>
@@ -467,10 +469,10 @@ function BookingSuccess({ open, doctor, date, slot, onClose, onDashboard }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function DoctorProfileModal({ open, doctor, onClose, onBook }) {
-  const [date,      setDate]      = useState("");
-  const [slots,     setSlots]     = useState([]);
+  const [date, setDate] = useState("");
+  const [slots, setSlots] = useState([]);
   const [loadSlots, setLoadSlots] = useState(false);
-  const [selSlot,   setSelSlot]   = useState(null);
+  const [selSlot, setSelSlot] = useState(null);
 
   const fetchSlots = useCallback(async (d) => {
     if (!doctor || !d) return;
@@ -529,7 +531,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
             </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl bg-white/20 hover:bg-white/30 text-white shrink-0">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
@@ -564,8 +566,8 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Clinic Address</p>
                   <div className="flex items-start gap-2 px-3.5 py-3 bg-gray-50 rounded-xl border border-gray-100 text-sm text-gray-700">
                     <svg className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                     {doctor.clinicAddress}
                   </div>
@@ -594,7 +596,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Available Slots</p>
                   {loadSlots ? (
                     <div className="grid grid-cols-3 gap-2">
-                      {[1,2,3,4,5,6].map((i) => (
+                      {[1, 2, 3, 4, 5, 6].map((i) => (
                         <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />
                       ))}
                     </div>
@@ -637,7 +639,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
               {selSlot && date && (
                 <div className="pt-2 border-t border-gray-100">
                   <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-100 mb-3">
-                    <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                    <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                     <p className="text-xs text-blue-700 font-medium">
                       Selected: {new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} at {selSlot.startTime}
                     </p>
@@ -645,7 +647,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                   <button onClick={() => onBook(doctor, selSlot, date)}
                     className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold
                       shadow-md shadow-blue-200 transition-colors flex items-center justify-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     Confirm Booking
                   </button>
                 </div>
@@ -736,21 +738,21 @@ function DoctorCard({ doctor, onView }) {
 export default function DoctorsPage() {
   const router = useRouter();
 
-  const [doctors,  setDoctors]  = useState([]);
-  const [loading,  setLoading]  = useState(false);
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const [nameQ,      setNameQ]      = useState("");
+  const [nameQ, setNameQ] = useState("");
   const [specialtyQ, setSpecialtyQ] = useState("All Specialties");
-  const [dateQ,      setDateQ]      = useState("");
+  const [dateQ, setDateQ] = useState("");
 
   // Modals
-  const [profileDoc,  setProfileDoc]  = useState(null);
+  const [profileDoc, setProfileDoc] = useState(null);
   const [bookingData, setBookingData] = useState(null);   // { doctor, slot, date }
   const [summaryData, setSummaryData] = useState(null);   // { doctor, slot, date, bookingInfo, appointmentId }
   const [successData, setSuccessData] = useState(null);   // free-appt success
-  const [booking,     setBooking]     = useState(false);
-  const [paying,      setPaying]      = useState(false);
+  const [booking, setBooking] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -770,9 +772,9 @@ export default function DoctorsPage() {
     setSearched(true);
     try {
       const params = {};
-      if (nameQ.trim())                    params.name      = nameQ.trim();
+      if (nameQ.trim()) params.name = nameQ.trim();
       if (specialtyQ !== "All Specialties") params.specialty = specialtyQ;
-      if (dateQ)                            params.date      = dateQ;
+      if (dateQ) params.date = dateQ;
 
       const { data } = await axios.get(`${API_BASE}/doctors`, {
         params,
@@ -790,137 +792,137 @@ export default function DoctorsPage() {
   useEffect(() => { handleSearch(); }, []); // eslint-disable-line
 
   // ── Step 1: Book appointment (create record in DB) ──────────────────────────
-// ── Step 1: Reserve slot (create temporary hold) ──────────────────────────
-const handleBookConfirm = async ({ reason, isForOthers, guestInfo }) => {
-  const { doctor, slot, date } = bookingData;
-  setBooking(true);
-  try {
-    // Reserve the slot first (no appointment created yet)
-    const resp = await axios.post(`${API_BASE}/appointments/reserve`, {
-      doctorId: doctor._id,
-      doctorName: doctor.name,
-      specialty: doctor.specialty,
-      dateTime: `${date}T${slot.startTime}:00`,
-      reason,
-      consultationFee: doctor.consultationFee,
-      isForSomeoneElse: isForOthers,
-      bookedFor: {
-        name: guestInfo.name,
-        age: guestInfo.age,
-        email: guestInfo.email,
-      },
-    }, { headers: authHeaders() });
-
-    const { reservationId, reservationData } = resp.data;
-    const hasFee = doctor.consultationFee > 0;
-
-    setBookingData(null);
-
-    if (hasFee) {
-      // Store reservation ID to use during payment
-      setSummaryData({
-        doctor,
-        slot,
-        date,
-        reservationId,  // ← Make sure this is included
-        reservationData,
-        bookingInfo: {
-          isForSomeoneElse: isForOthers,
-          bookedFor: { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email },
+  // ── Step 1: Reserve slot (create temporary hold) ──────────────────────────
+  const handleBookConfirm = async ({ reason, isForOthers, guestInfo }) => {
+    const { doctor, slot, date } = bookingData;
+    setBooking(true);
+    try {
+      // Reserve the slot first (no appointment created yet)
+      const resp = await axios.post(`${API_BASE_APPOINTMENT}/appointments/reserve`, {
+        doctorId: doctor._id,
+        doctorName: doctor.name,
+        specialty: doctor.specialty,
+        dateTime: `${date}T${slot.startTime}:00`,
+        reason,
+        consultationFee: doctor.consultationFee,
+        isForSomeoneElse: isForOthers,
+        bookedFor: {
+          name: guestInfo.name,
+          age: guestInfo.age,
+          email: guestInfo.email,
         },
-      });
-      addToast("Slot reserved! Please complete payment within 10 minutes.", "info");
-    } else {
-      // Free appointment - create directly
-      const createResp = await axios.post(`${API_BASE}/appointments/create-from-reservation`, {
-        reservationId,
-        paymentId: "free_appointment",
       }, { headers: authHeaders() });
-      
-      setSuccessData({ doctor, slot, date });
-      addToast("Appointment booked successfully!", "success");
-      setTimeout(() => router.push("/dashboard/appointments"), 3000);
+
+      const { reservationId, reservationData } = resp.data;
+      const hasFee = doctor.consultationFee > 0;
+
+      setBookingData(null);
+
+      if (hasFee) {
+        // Store reservation ID to use during payment
+        setSummaryData({
+          doctor,
+          slot,
+          date,
+          reservationId,  // ← Make sure this is included
+          reservationData,
+          bookingInfo: {
+            isForSomeoneElse: isForOthers,
+            bookedFor: { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email },
+          },
+        });
+        addToast("Slot reserved! Please complete payment within 10 minutes.", "info");
+      } else {
+        // Free appointment - create directly
+        const createResp = await axios.post(`${API_BASE}/appointments/create-from-reservation`, {
+          reservationId,
+          paymentId: "free_appointment",
+        }, { headers: authHeaders() });
+
+        setSuccessData({ doctor, slot, date });
+        addToast("Appointment booked successfully!", "success");
+        setTimeout(() => router.push("/dashboard/appointments"), 3000);
+      }
+    } catch (err) {
+      console.error("Booking error:", err);
+      addToast(err.response?.data?.message || "Booking failed. Please try again.", "error");
+    } finally {
+      setBooking(false);
     }
-  } catch (err) {
-    console.error("Booking error:", err);
-    addToast(err.response?.data?.message || "Booking failed. Please try again.", "error");
-  } finally {
-    setBooking(false);
-  }
-};
+  };
 
   // ── Step 2: Pay via PayHere ─────────────────────────────────────────────────
-// ── Step 2: Pay via PayHere ─────────────────────────────────────────────────
-const handleProceedToPayment = async () => {
-  if (!summaryData) return;
-  setPaying(true);
-  try {
-    const { doctor, reservationId, bookingInfo } = summaryData;  // ← Get reservationId from summaryData
+  // ── Step 2: Pay via PayHere ─────────────────────────────────────────────────
+  const handleProceedToPayment = async () => {
+    if (!summaryData) return;
+    setPaying(true);
+    try {
+      const { doctor, reservationId, bookingInfo } = summaryData;  // ← Get reservationId from summaryData
 
-    const { data } = await axios.post(
-      `${API_BASE}/payments/initiate`,
-      {
-        appointmentId: reservationId,  // ← Use reservationId as appointmentId
-        amount: doctor.consultationFee,
-        patientName: bookingInfo.isForSomeoneElse
-          ? bookingInfo.bookedFor?.name
-          : undefined,
-        patientEmail: bookingInfo.isForSomeoneElse
-          ? bookingInfo.bookedFor?.email
-          : undefined,
-        reservationId,  // ← Pass reservationId separately
-      },
-      { headers: authHeaders() }
-    );
-    
-    console.log("🔍 Full paymentData being sent:", JSON.stringify(data.paymentData, null, 2));
+      const { data } = await axios.post(
+        `${API_BASE_PAYMENT}/payments/initiate`,
+        {
+          appointmentId: reservationId,  // ← Use reservationId as appointmentId
+          amount: doctor.consultationFee,
+          patientName: bookingInfo.isForSomeoneElse
+            ? bookingInfo.bookedFor?.name
+            : undefined,
+          patientEmail: bookingInfo.isForSomeoneElse
+            ? bookingInfo.bookedFor?.email
+            : undefined,
+          reservationId,  // ← Pass reservationId separately
+        },
+        { headers: authHeaders() }
+      );
 
-    // Verify all required fields are present
-    const required = ['merchant_id', 'order_id', 'amount', 'currency', 'hash', 'return_url', 'notify_url'];
-    required.forEach(field => {
-      if (!data.paymentData[field]) {
-        console.error(`❌ MISSING REQUIRED FIELD: ${field}`);
-      } else {
-        console.log(`✅ ${field}: ${data.paymentData[field]}`);
-      }
-    });
+      console.log("🔍 Full paymentData being sent:", JSON.stringify(data.paymentData, null, 2));
 
-    if (data.success && data.checkoutUrl && data.paymentData) {
-      // Save orderId so payment-status page can poll even without URL params
-      if (typeof window !== "undefined") {
-        localStorage.setItem("lastPayhereOrderId", data.orderId);
-        // Also store reservationId for recovery
-        localStorage.setItem("lastReservationId", reservationId);
-      }
-
-      // Build hidden form and submit to PayHere
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = data.checkoutUrl;
-      form.style.display = "none";
-
-      Object.keys(data.paymentData).forEach((key) => {
-        if (data.paymentData[key] !== null && data.paymentData[key] !== undefined) {
-          const input = document.createElement("input");
-          input.type = "hidden";
-          input.name = key;
-          input.value = data.paymentData[key];
-          form.appendChild(input);
+      // Verify all required fields are present
+      const required = ['merchant_id', 'order_id', 'amount', 'currency', 'hash', 'return_url', 'notify_url'];
+      required.forEach(field => {
+        if (!data.paymentData[field]) {
+          console.error(`❌ MISSING REQUIRED FIELD: ${field}`);
+        } else {
+          console.log(`✅ ${field}: ${data.paymentData[field]}`);
         }
       });
 
-      document.body.appendChild(form);
-      console.log("🚀 Submitting to PayHere:", data.checkoutUrl);
-      form.submit();
-    } else {
-      throw new Error("Invalid payment response from server");
+      if (data.success && data.checkoutUrl && data.paymentData) {
+        // Save orderId so payment-status page can poll even without URL params
+        if (typeof window !== "undefined") {
+          localStorage.setItem("lastPayhereOrderId", data.orderId);
+          // Also store reservationId for recovery
+          localStorage.setItem("lastReservationId", reservationId);
+        }
+
+        // Build hidden form and submit to PayHere
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = data.checkoutUrl;
+        form.style.display = "none";
+
+        Object.keys(data.paymentData).forEach((key) => {
+          if (data.paymentData[key] !== null && data.paymentData[key] !== undefined) {
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = key;
+            input.value = data.paymentData[key];
+            form.appendChild(input);
+          }
+        });
+
+        document.body.appendChild(form);
+        console.log("🚀 Submitting to PayHere:", data.checkoutUrl);
+        form.submit();
+      } else {
+        throw new Error("Invalid payment response from server");
+      }
+    } catch (err) {
+      console.error("Payment error:", err);
+      addToast(err.response?.data?.message || "Payment failed. Please try again.", "error");
+      setPaying(false);
     }
-  } catch (err) {
-    console.error("Payment error:", err);
-    addToast(err.response?.data?.message || "Payment failed. Please try again.", "error");
-    setPaying(false);
-  }
-};
+  };
 
   const handleOpenBook = (doctor, slot, date) => {
     setProfileDoc(null);
@@ -984,7 +986,7 @@ const handleProceedToPayment = async () => {
                 <div className="relative flex-1">
                   <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-300 pointer-events-none"
                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                   <input type="text" value={nameQ} onChange={(e) => setNameQ(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -1007,8 +1009,8 @@ const handleProceedToPayment = async () => {
                     hover:bg-blue-50 disabled:opacity-70 shadow-lg transition-colors whitespace-nowrap
                     flex items-center gap-2">
                   {loading
-                    ? <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-                    : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    ? <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                    : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                   }
                   Search
                 </button>
@@ -1037,10 +1039,10 @@ const handleProceedToPayment = async () => {
                 <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4 animate-pulse">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl bg-gray-200" />
-                    <div className="flex-1 space-y-2"><div className="h-3.5 w-28 bg-gray-200 rounded"/><div className="h-4 w-20 bg-gray-100 rounded-full"/></div>
+                    <div className="flex-1 space-y-2"><div className="h-3.5 w-28 bg-gray-200 rounded" /><div className="h-4 w-20 bg-gray-100 rounded-full" /></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">{[1,2,3].map((j) => <div key={j} className="h-14 bg-gray-100 rounded-xl"/>)}</div>
-                  <div className="flex gap-2 border-t border-gray-100 pt-3">{[1,2].map((j) => <div key={j} className="flex-1 h-8 bg-gray-100 rounded-xl"/>)}</div>
+                  <div className="grid grid-cols-3 gap-2">{[1, 2, 3].map((j) => <div key={j} className="h-14 bg-gray-100 rounded-xl" />)}</div>
+                  <div className="flex gap-2 border-t border-gray-100 pt-3">{[1, 2].map((j) => <div key={j} className="flex-1 h-8 bg-gray-100 rounded-xl" />)}</div>
                 </div>
               ))}
             </div>

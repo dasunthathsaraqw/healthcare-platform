@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_PATIENT_API_URL || "http://localhost:8080/api";
 
 function authHeaders() {
   const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -13,34 +13,34 @@ function authHeaders() {
 // ── Metric Type Config ────────────────────────────────────────────────────────
 
 const METRIC_TYPES = [
-  { key: "blood_pressure", label: "Blood Pressure", unit: "mmHg",  icon: "❤️",  color: "red"    },
-  { key: "weight",         label: "Body Weight",    unit: "kg",    icon: "⚖️",  color: "blue"   },
-  { key: "heart_rate",     label: "Heart Rate",     unit: "bpm",   icon: "💓",  color: "purple" },
+  { key: "blood_pressure", label: "Blood Pressure", unit: "mmHg", icon: "❤️", color: "red" },
+  { key: "weight", label: "Body Weight", unit: "kg", icon: "⚖️", color: "blue" },
+  { key: "heart_rate", label: "Heart Rate", unit: "bpm", icon: "💓", color: "purple" },
 ];
 
 const COLOR_MAP = {
-  red:    { bg: "bg-red-50",    text: "text-red-700",    border: "border-red-200",    bar: "bg-red-500"    },
-  blue:   { bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200",   bar: "bg-blue-500"   },
+  red: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", bar: "bg-red-500" },
+  blue: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", bar: "bg-blue-500" },
   purple: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", bar: "bg-purple-500" },
 };
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function HealthMetricsPage() {
-  const [metrics, setMetrics]     = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(false);
+  const [metrics, setMetrics] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [activeType, setActiveType] = useState("blood_pressure");
-  const [days, setDays]           = useState(30);
+  const [days, setDays] = useState(30);
 
   // Form state
-  const [systolic, setSystolic]     = useState("");
-  const [diastolic, setDiastolic]   = useState("");
-  const [weightVal, setWeightVal]   = useState("");
-  const [heartRate, setHeartRate]   = useState("");
-  const [notes, setNotes]           = useState("");
-  const [formError, setFormError]   = useState("");
-  const [success, setSuccess]       = useState("");
+  const [systolic, setSystolic] = useState("");
+  const [diastolic, setDiastolic] = useState("");
+  const [weightVal, setWeightVal] = useState("");
+  const [heartRate, setHeartRate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [formError, setFormError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const fetchMetrics = async () => {
     setLoading(true);
@@ -214,7 +214,7 @@ export default function HealthMetricsPage() {
               <button type="submit" disabled={saving}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-all duration-200 shadow-sm">
                 {saving ? (
-                  <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Saving...</>
+                  <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> Saving...</>
                 ) : "Log Entry"}
               </button>
             </form>
@@ -284,7 +284,7 @@ export default function HealthMetricsPage() {
 
             {loading ? (
               <div className="p-5 space-y-3">
-                {[1,2,3].map((i) => (
+                {[1, 2, 3].map((i) => (
                   <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" />
                 ))}
               </div>

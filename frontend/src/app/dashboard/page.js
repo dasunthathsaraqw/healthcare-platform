@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_APPOINTMENT_API_URL || "http://localhost:8080/api";
 
 function authHeaders() {
   const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -34,7 +34,7 @@ const STATUS_STYLES = {
   confirmed: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500", label: "Confirmed" },
   completed: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500", label: "Completed" },
   cancelled: { bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200", dot: "bg-gray-400", label: "Cancelled" },
-  rejected:  { bg: "bg-red-50",   text: "text-red-600",  border: "border-red-200",   dot: "bg-red-400",   label: "Rejected"  },
+  rejected: { bg: "bg-red-50", text: "text-red-600", border: "border-red-200", dot: "bg-red-400", label: "Rejected" },
 };
 
 function AppointmentCard({ appt, onClick }) {
@@ -45,7 +45,7 @@ function AppointmentCard({ appt, onClick }) {
   const dt = appt.dateTime || appt.date;
 
   return (
-    <button 
+    <button
       onClick={() => onClick(appt)}
       className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all p-4 flex items-center gap-3 group"
     >
@@ -72,7 +72,7 @@ function AppointmentCard({ appt, onClick }) {
           {sc.label}
         </span>
         <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7"/>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
         </svg>
       </div>
     </button>
@@ -110,7 +110,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-      
+
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-[scaleIn_0.2s_ease-out]">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white relative">
@@ -119,7 +119,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          
+
           <div className="flex items-center gap-5">
             <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur shadow-inner flex items-center justify-center text-white text-3xl font-bold border border-white/30 overflow-hidden">
               {getInitials(docName)}
@@ -197,7 +197,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
               <>
                 {/* Join Meeting for confirmed appointments */}
                 {status === "confirmed" && appt.meetingLink && (
-                  <button 
+                  <button
                     onClick={handleJoinMeeting}
                     className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3"
                   >
@@ -210,7 +210,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
 
                 <div className="flex gap-3">
                   {(status === "confirmed") && (
-                    <button 
+                    <button
                       onClick={() => setCancelStep("confirm")}
                       className="flex-1 py-3.5 rounded-2xl border-2 border-slate-100 text-slate-400 text-xs font-bold hover:bg-red-50 hover:border-red-100 hover:text-red-500 transition-all flex items-center justify-center gap-2"
                     >
@@ -220,7 +220,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                       Cancel Appointment
                     </button>
                   )}
-                  <button 
+                  <button
                     onClick={onClose}
                     className="flex-1 py-3.5 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all"
                   >
@@ -234,7 +234,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
                     Please provide a reason for cancellation
                   </label>
-                  <textarea 
+                  <textarea
                     autoFocus
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
@@ -243,13 +243,13 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                   />
                 </div>
                 <div className="flex gap-3">
-                  <button 
+                  <button
                     onClick={() => setCancelStep("view")}
                     className="flex-1 py-3.5 rounded-2xl border border-slate-100 text-slate-500 text-xs font-bold hover:bg-slate-50 transition-all"
                   >
                     Back
                   </button>
-                  <button 
+                  <button
                     onClick={() => onCancel(appt._id, reason)}
                     disabled={cancelling === appt._id || !reason.trim()}
                     className="flex-[2] py-3.5 rounded-2xl bg-red-600 text-white text-xs font-black shadow-lg shadow-red-200 hover:bg-red-700 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
@@ -288,9 +288,9 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STAT_THEME = {
-  blue:   { bg: "bg-blue-50",   iconBg: "bg-blue-100   text-blue-600",   val: "text-blue-700"   },
-  green:  { bg: "bg-green-50",  iconBg: "bg-green-100  text-green-600",  val: "text-green-700"  },
-  amber:  { bg: "bg-amber-50",  iconBg: "bg-amber-100  text-amber-600",  val: "text-amber-700"  },
+  blue: { bg: "bg-blue-50", iconBg: "bg-blue-100   text-blue-600", val: "text-blue-700" },
+  green: { bg: "bg-green-50", iconBg: "bg-green-100  text-green-600", val: "text-green-700" },
+  amber: { bg: "bg-amber-50", iconBg: "bg-amber-100  text-amber-600", val: "text-amber-700" },
   purple: { bg: "bg-purple-50", iconBg: "bg-purple-100 text-purple-600", val: "text-purple-700" },
 };
 
@@ -346,7 +346,7 @@ export default function PatientDashboard() {
         axios.get(`${API_BASE}/appointments/patient/upcoming`, { headers: authHeaders() }),
         axios.get(`${API_BASE}/appointments/patient/past`, { headers: authHeaders() }),
       ]);
-      
+
       let all = [];
       if (upRes.status === "fulfilled") {
         const upcomingData = upRes.value.data.appointments || upRes.value.data || [];
@@ -356,12 +356,12 @@ export default function PatientDashboard() {
         const pastData = pastRes.value.data.appointments || pastRes.value.data || [];
         all = [...all, ...pastData];
       }
-      
+
       // ✅ FILTER: Only show confirmed or completed appointments (paid)
-      const paidAppointments = all.filter(a => 
+      const paidAppointments = all.filter(a =>
         a.status === "confirmed" || a.status === "completed"
       );
-      
+
       // Sort by date (newest first)
       paidAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
       setAppointments(paidAppointments);
@@ -397,7 +397,7 @@ export default function PatientDashboard() {
     const aptDate = new Date(a.dateTime);
     return aptDate >= now && a.status !== "cancelled" && a.status !== "rejected";
   }).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
-  
+
   const past = appointments.filter(a => {
     const aptDate = new Date(a.dateTime);
     return aptDate < now || a.status === "cancelled" || a.status === "rejected";
@@ -411,14 +411,14 @@ export default function PatientDashboard() {
     const d = new Date(a.dateTime);
     return d.toDateString() === now.toDateString();
   }).length;
-  
+
   const totalUpcoming = upcoming.length;
   const totalCompleted = past.filter(a => a.status === "completed").length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50/50 to-blue-50/20">
-      
-      <AppointmentDetailModal 
+
+      <AppointmentDetailModal
         open={!!selectedAppt}
         appt={selectedAppt}
         onClose={() => setSelectedAppt(null)}
@@ -449,14 +449,14 @@ export default function PatientDashboard() {
             <button onClick={fetchAppointments} disabled={loading}
               className="p-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-colors" title="Refresh">
               <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
             <Link href="/doctors"
               className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-blue-600 text-sm font-bold
                 hover:bg-blue-50 shadow-lg shadow-blue-900/20 transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Book Appointment
             </Link>
@@ -469,16 +469,16 @@ export default function PatientDashboard() {
         {/* Stat cards - Only showing confirmed appointment stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <StatCard loading={loading} label="Confirmed" value={totalUpcoming} color="blue"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>}
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
           />
           <StatCard loading={loading} label="Today" value={todayCount} color="green"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>}
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
           />
           <StatCard loading={loading} label="Completed" value={totalCompleted} color="purple"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>}
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
           />
           <StatCard loading={loading} label="Total" value={appointments.length} color="amber"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>}
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>}
           />
         </div>
 
@@ -486,7 +486,7 @@ export default function PatientDashboard() {
         {error && (
           <div className="flex items-center gap-2.5 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
             <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/>
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
             </svg>
             {error}
             <button onClick={fetchAppointments} className="ml-auto text-xs underline font-semibold">Retry</button>
@@ -514,7 +514,7 @@ export default function PatientDashboard() {
           </div>
           <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
             {loading ? (
-              [1,2,3].map((i) => (
+              [1, 2, 3].map((i) => (
                 <div key={i} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 animate-pulse">
                   <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" />
                   <div className="flex-1 space-y-2">
@@ -545,10 +545,10 @@ export default function PatientDashboard() {
           <h2 className="text-sm font-bold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Find a Doctor",    href: "/doctors",            emoji: "🔍", from: "from-blue-50",   to: "to-blue-100",   border: "border-blue-200",   hover: "hover:border-blue-300"   },
-              { label: "My Appointments",  href: "/appointments",        emoji: "📅", from: "from-green-50",  to: "to-green-100",  border: "border-green-200",  hover: "hover:border-green-300"  },
-              { label: "My Profile",       href: "/dashboard/profile",   emoji: "👤", from: "from-purple-50", to: "to-purple-100", border: "border-purple-200", hover: "hover:border-purple-300" },
-              { label: "Medical Records",  href: "/dashboard/reports",   emoji: "📋", from: "from-amber-50",  to: "to-amber-100",  border: "border-amber-200",  hover: "hover:border-amber-300"  },
+              { label: "Find a Doctor", href: "/doctors", emoji: "🔍", from: "from-blue-50", to: "to-blue-100", border: "border-blue-200", hover: "hover:border-blue-300" },
+              { label: "My Appointments", href: "/appointments", emoji: "📅", from: "from-green-50", to: "to-green-100", border: "border-green-200", hover: "hover:border-green-300" },
+              { label: "My Profile", href: "/dashboard/profile", emoji: "👤", from: "from-purple-50", to: "to-purple-100", border: "border-purple-200", hover: "hover:border-purple-300" },
+              { label: "Medical Records", href: "/dashboard/reports", emoji: "📋", from: "from-amber-50", to: "to-amber-100", border: "border-amber-200", hover: "hover:border-amber-300" },
             ].map(({ label, href, emoji, from, to, border, hover }) => (
               <Link key={label} href={href}
                 className={`flex flex-col items-center justify-center gap-2.5 py-5 rounded-2xl
