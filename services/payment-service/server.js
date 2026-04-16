@@ -6,24 +6,17 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3004;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true })); // PayHere sends urlencoded POST
 
-// MongoDB Connection
 mongoose
   .connect(process.env.DB_URL)
-  .then(() =>
-    console.log("--Payment Service: Connected to Payment Service MongoDB--"),
-  )
-  .catch((err) =>
-    console.error("Payment Service: MongoDB connection error:", err),
-  );
+  .then(() => console.log("--Payment Service: Connected to MongoDB--"))
+  .catch((err) => console.error("Payment Service: MongoDB error:", err));
 
-// Health Check
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "OK",
@@ -32,23 +25,18 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Routes
 app.use("/api/payments", require("./src/routes/paymentRoutes-auth"));
 
-// Error Handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({
-    error: "Something went wrong!",
-    message: err.message,
-  });
+  res.status(500).json({ error: "Something went wrong!", message: err.message });
 });
 
-// 404 Handler
 app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
 app.listen(PORT, () => {
   console.log(`--Payment Service running on port ${PORT}--`);
+  console.log(`--Notify URL: ${process.env.PAYHERE_NOTIFY_URL}--`);
 });
