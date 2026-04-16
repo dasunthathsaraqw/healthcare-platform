@@ -18,6 +18,13 @@ const authenticate = async (req, res, next) => {
       token,
       process.env.JWT_SECRET || "your-secret-key",
     );
+
+    // Bypass DB check for service-to-service calls (e.g., Doctor fetching patient details)
+    if (decoded.role === "doctor" || decoded.role === "admin") {
+      req.user = { _id: decoded.userId || decoded.id, role: decoded.role };
+      return next();
+    }
+
     const user = await User.findById(decoded.userId).select("-password");
 
     if (!user) {

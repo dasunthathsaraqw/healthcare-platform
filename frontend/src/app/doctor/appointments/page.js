@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 
 const API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
@@ -408,13 +409,14 @@ function EmptyState({ icon = "📅", title = "No appointments found", subtitle =
 // APPOINTMENT CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoading }) {
+function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoading, onStartConsultation }) {
   const status = appt.status || "pending";
   const sc     = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   const { date, time } = formatDateTime(appt.dateTime || appt.date);
   const patientName = appt.patientName || appt.patientId?.name || "Unknown Patient";
   const inWindow    = isWithinWindow(appt.dateTime || appt.date);
   const isActioning = actionLoading === appt._id;
+  const isVideo     = appt.meetingLink || appt.type === "video" || appt.appointmentType === "video";
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group">
@@ -514,16 +516,24 @@ function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoadin
             </>
           )}
 
-          {/* Confirmed: start consultation in window */}
-          {status === "confirmed" && inWindow && (
-            <button className="px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white text-xs font-bold
-              transition-colors shadow-sm shadow-green-200 flex items-center gap-1.5 animate-pulse">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              Start Consultation
-            </button>
+          {/* Confirmed: start consultation (always show if confirmed + video) */}
+          {status === "confirmed" && (
+            <>
+              {/* Start Consultation – glow when within 15 min window */}
+              <button
+                onClick={() => onStartConsultation(appt._id)}
+                className={`px-4 py-2 rounded-xl text-white text-xs font-bold transition-colors shadow-sm flex items-center gap-1.5
+                  ${inWindow
+                    ? "bg-green-500 hover:bg-green-600 shadow-green-200 animate-pulse"
+                    : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
+                  }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                {inWindow ? "Start Now" : "Start Consultation"}
+              </button>
+            </>
           )}
 
           {/* Completed: view prescription */}
@@ -589,6 +599,7 @@ function SkeletonCard() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function AppointmentsPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab]       = useState("pending");
   const [appointments, setAppointments] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -705,6 +716,11 @@ export default function AppointmentsPage() {
     }
   };
 
+  // ── Start Consultation ────────────────────────────────────────────────────
+  const handleStartConsultation = (appointmentId) => {
+    router.push(`/doctor/consultation/${appointmentId}`);
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
@@ -805,6 +821,7 @@ export default function AppointmentsPage() {
                     onAccept={handleAccept}
                     onReject={setRejectTarget}
                     onViewDetails={(pid) => pid && setPatientId(pid)}
+                    onStartConsultation={handleStartConsultation}
                     actionLoading={actionLoading}
                   />
                 ))}

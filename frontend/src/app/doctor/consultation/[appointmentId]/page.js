@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import axios from "axios";
+import ChatPanel from "@/components/telemedicine/ChatPanel";
 
 const API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
 
@@ -549,7 +550,7 @@ export default function ConsultationPage() {
   const [duration,      setDuration]      = useState(0);
 
   // Right panel tab (desktop)
-  const [panelTab,  setPanelTab]  = useState("info");  // "info" | "prescription"
+  const [panelTab,  setPanelTab]  = useState("info");  // "info" | "prescription" | "chat"
   // Mobile bottom sheet
   const [mobilePanel, setMobilePanel] = useState(null);
 
@@ -716,15 +717,17 @@ export default function ConsultationPage() {
               {/* Panel header with tabs */}
               <div className="flex border-b border-gray-100 shrink-0 bg-white">
                 {[
-                  { id: "info",         label: "Patient Info" },
-                  { id: "prescription", label: "Prescription" },
+                  { id: "info",         label: "Patient Info", icon: "👤" },
+                  { id: "prescription", label: "Rx",           icon: "💊" },
+                  { id: "chat",         label: "Chat",         icon: "💬" },
                 ].map((t) => (
                   <button key={t.id} onClick={() => setPanelTab(t.id)}
-                    className={`flex-1 px-4 py-3 text-xs font-bold uppercase tracking-wide border-b-2 transition-colors
+                    className={`flex-1 px-2 py-3 text-[11px] font-bold uppercase tracking-wide border-b-2 transition-colors flex flex-col items-center gap-0.5
                       ${panelTab === t.id
                         ? "border-blue-600 text-blue-600 bg-blue-50/30"
                         : "border-transparent text-gray-400 hover:text-gray-600"}`}>
-                    {t.label}
+                    <span>{t.icon}</span>
+                    <span>{t.label}</span>
                   </button>
                 ))}
               </div>
@@ -738,7 +741,7 @@ export default function ConsultationPage() {
               )}
 
               {/* Scrollable content */}
-              <div className="flex-1 overflow-y-auto px-4 pt-4">
+              <div className={`flex-1 min-h-0 ${panelTab === "chat" ? "flex flex-col overflow-hidden" : "overflow-y-auto px-4 pt-4"}`}>
                 {panelTab === "info" && (
                   <PatientInfoPanel patient={patient || {}} prescriptions={prescriptions} />
                 )}
@@ -750,6 +753,13 @@ export default function ConsultationPage() {
                         <p className="text-xs text-gray-400 mt-1">This consultation is complete</p>
                       </div>
                     : <PrescriptionPanel onIssue={handleIssue} saving={saving} />
+                )}
+                {panelTab === "chat" && (
+                  <ChatPanel
+                    appointmentId={appointmentId}
+                    otherPartyName={patientName}
+                    className="flex-1 h-full"
+                  />
                 )}
               </div>
             </div>
