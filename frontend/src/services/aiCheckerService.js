@@ -1,7 +1,11 @@
 import axios from "axios";
 
+// Route through the API Gateway (port 8080) so it works uniformly inside Docker
+// and in local dev.  The gateway now forwards /api/ai-checker → ai-symptom-checker-service.
 const AI_CHECKER_BASE_URL =
-  process.env.NEXT_PUBLIC_AI_CHECKER_API_URL || "http://localhost:3010";
+  process.env.NEXT_PUBLIC_AI_CHECKER_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, "") ||
+  "http://localhost:8080";
 
 const aiCheckerApi = axios.create({
   baseURL: AI_CHECKER_BASE_URL.replace(/\/+$/, ""),

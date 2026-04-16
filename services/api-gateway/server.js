@@ -111,6 +111,12 @@ app.use(
   handleProxy(services.ai, "/api/symptom-checker"),
 );
 
+// AI Checker (alias used by the patient-side AI checker UI)
+app.use(
+  "/api/ai-checker",
+  handleProxy(services.ai, "/api/ai-checker"),
+);
+
 // Admin routes (doctor verification etc.) — proxied to doctor-service admin endpoints
 app.use("/api/admin", handleProxy(services.admin, "/api/admin"));
 
