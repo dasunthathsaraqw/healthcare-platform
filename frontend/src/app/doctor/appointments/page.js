@@ -176,6 +176,54 @@ function RejectModal({ open, onClose, onConfirm, loading }) {
 // PATIENT DETAILS MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 
+function MetricCard({ type, entries }) {
+  const latest = entries[0];
+  if (!latest) return null;
+
+  const icons = {
+    blood_pressure: "🩸",
+    weight: "⚖️",
+    heart_rate: "❤️",
+  };
+  const labels = {
+    blood_pressure: "Blood Pressure",
+    weight: "Weight",
+    heart_rate: "Heart Rate",
+  };
+  const colors = {
+    blood_pressure: "from-red-50 to-pink-50 border-red-100",
+    weight: "from-blue-50 to-cyan-50 border-blue-100",
+    heart_rate: "from-purple-50 to-violet-50 border-purple-100",
+  };
+  const textColors = {
+    blood_pressure: "text-red-700",
+    weight: "text-blue-700",
+    heart_rate: "text-purple-700",
+  };
+
+  const displayValue = type === "blood_pressure"
+    ? `${latest.value?.systolic || "—"}/${latest.value?.diastolic || "—"}`
+    : latest.value;
+
+  return (
+    <div className={`rounded-xl border bg-gradient-to-br p-4 ${colors[type] || "from-gray-50 to-gray-100 border-gray-100"}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{labels[type] || type}</span>
+        <span className="text-base">{icons[type] || "📊"}</span>
+      </div>
+      <p className={`text-2xl font-bold ${textColors[type] || "text-gray-800"}`}>
+        {displayValue} <span className="text-sm font-normal text-gray-400">{latest.unit}</span>
+      </p>
+      <p className="text-xs text-gray-400 mt-1">
+        {new Date(latest.recordedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+      </p>
+      {entries.length > 1 && (
+        <p className="text-[10px] text-gray-400 mt-2">{entries.length} readings in last 30 days</p>
+      )}
+    </div>
+  );
+}
+
 function PatientModal({ open, onClose, patientId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -188,7 +236,10 @@ function PatientModal({ open, onClose, patientId }) {
     setError("");
     setData(null);
     setLoading(true);
-    axios.get(`${API_BASE}/doctors/patients/${patientId}`, { headers: authHeaders() })
+
+    // Call patient-service directly — avoids the broken cross-service DNS
+    axios
+      .get(`${API_BASE}/patients/doctor/patient/${patientId}/summary`, { headers: authHeaders() })
       .then(({ data: res }) => setData(res))
       .catch((err) => setError(err.response?.data?.message || "Failed to load patient data"))
       .finally(() => setLoading(false));
@@ -197,20 +248,23 @@ function PatientModal({ open, onClose, patientId }) {
   if (!open || typeof window === "undefined") return null;
 
   const patient = data?.patient || {};
-  const prescriptions = data?.prescriptions || [];
+  const metricsGrouped = data?.metrics?.grouped || {};
+  const recentReports = data?.reports?.recent || [];
   const age = calcAge(patient.dob || patient.dateOfBirth);
+
+  const metricTypes = Object.keys(metricsGrouped);
 
   const INNER_TABS = [
     { id: "info", label: "Basic Info" },
     { id: "history", label: "Medical History" },
-    { id: "scripts", label: `Prescriptions (${prescriptions.length})` },
-    { id: "reports", label: "Reports" },
+    { id: "metrics", label: `Health Metrics (${data?.metrics?.count ?? 0})` },
+    { id: "reports", label: `Reports (${data?.reports?.count ?? 0})` },
   ];
 
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden animate-[scaleIn_0.2s_ease-out] flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden animate-[scaleIn_0.2s_ease-out] flex flex-col max-h-[90vh]">
 
         {/* Header */}
         <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-cyan-50 shrink-0">
@@ -248,13 +302,19 @@ function PatientModal({ open, onClose, patientId }) {
           )}
           {error && (
             <div className="text-center py-10">
-              <p className="text-sm text-red-500">{error}</p>
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.072 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-gray-700 mb-1">Failed to Load Patient Data</p>
+              <p className="text-xs text-red-500">{error}</p>
             </div>
           )}
 
           {!loading && !error && (
             <>
-              {/* Basic Info */}
+              {/* ── Basic Info ─────────────────────────────────────────────── */}
               {innerTab === "info" && (
                 <div className="space-y-3">
                   {[
@@ -262,28 +322,30 @@ function PatientModal({ open, onClose, patientId }) {
                     { label: "Email", value: patient.email },
                     { label: "Phone", value: patient.phone },
                     { label: "Age", value: age ? `${age} years` : null },
+                    { label: "Date of Birth", value: patient.dateOfBirth ? new Date(patient.dateOfBirth).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : null },
                     { label: "Gender", value: patient.gender },
                     { label: "Blood Group", value: patient.bloodGroup || patient.bloodType },
-                    { label: "Address", value: patient.address },
+                    { label: "City", value: patient.address?.city },
+                    { label: "Country", value: patient.address?.country },
                     { label: "Emergency Contact", value: patient.emergencyContact },
                   ].map(({ label, value }) => value ? (
                     <div key={label} className="flex gap-3 py-2.5 border-b border-gray-100 last:border-0">
-                      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-32 shrink-0">{label}</span>
+                      <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide w-36 shrink-0">{label}</span>
                       <span className="text-sm text-gray-800">{value}</span>
                     </div>
                   ) : null)}
-                  {!patient.name && <p className="text-sm text-gray-400 text-center py-6">No patient data available</p>}
+                  {!patient.name && <EmptyState icon="👤" title="No patient data available" subtitle="Patient profile could not be loaded" />}
                 </div>
               )}
 
-              {/* Medical History */}
+              {/* ── Medical History ─────────────────────────────────────────── */}
               {innerTab === "history" && (
                 <div>
-                  {(patient.medicalHistory || patient.conditions || []).length === 0 ? (
+                  {(patient.medicalHistory || []).length === 0 ? (
                     <EmptyState icon="📋" title="No medical history" subtitle="No conditions or history recorded" />
                   ) : (
                     <ul className="space-y-2">
-                      {(patient.medicalHistory || patient.conditions || []).map((item, i) => (
+                      {(patient.medicalHistory || []).map((item, i) => (
                         <li key={i}
                           className="flex items-start gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-gray-800">
                           <span className="text-blue-400 mt-0.5 shrink-0">•</span>
@@ -292,8 +354,6 @@ function PatientModal({ open, onClose, patientId }) {
                       ))}
                     </ul>
                   )}
-
-                  {/* Allergies */}
                   {(patient.allergies || []).length > 0 && (
                     <div className="mt-4">
                       <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Allergies</p>
@@ -307,73 +367,89 @@ function PatientModal({ open, onClose, patientId }) {
                 </div>
               )}
 
-              {/* Prescriptions */}
-              {innerTab === "scripts" && (
-                <div className="space-y-3">
-                  {prescriptions.length === 0 ? (
-                    <EmptyState icon="💊" title="No prescriptions" subtitle="No prescriptions have been issued yet" />
-                  ) : prescriptions.map((rx) => (
-                    <div key={rx._id} className="border border-gray-200 rounded-xl overflow-hidden">
-                      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{rx.diagnosis}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            {rx.issuedAt ? new Date(rx.issuedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
-                          </p>
-                        </div>
-                        {rx.followUpDate && (
-                          <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
-                            Follow-up: {new Date(rx.followUpDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                          </span>
-                        )}
-                      </div>
-                      <ul className="divide-y divide-gray-100">
-                        {(rx.medications || []).map((med, i) => (
-                          <li key={i} className="px-4 py-2.5 flex items-start gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">{med.name}</p>
-                              <p className="text-xs text-gray-400">{[med.dosage, med.frequency, med.duration].filter(Boolean).join(" · ")}</p>
-                              {med.instructions && <p className="text-xs text-amber-600 mt-0.5">{med.instructions}</p>}
-                            </div>
-                          </li>
+              {/* ── Health Metrics ──────────────────────────────────────────── */}
+              {innerTab === "metrics" && (
+                <div className="space-y-4">
+                  {metricTypes.length === 0 ? (
+                    <EmptyState icon="📊" title="No health metrics recorded" subtitle="Patient has not logged any health data yet" />
+                  ) : (
+                    <>
+                      {/* Latest reading cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {metricTypes.map((type) => (
+                          <MetricCard key={type} type={type} entries={metricsGrouped[type]} />
                         ))}
-                      </ul>
-                      {rx.notes && (
-                        <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-100">
-                          <p className="text-xs text-amber-700"><span className="font-semibold">Note:</span> {rx.notes}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+
+                      {/* History list per type */}
+                      {metricTypes.map((type) => {
+                        const entries = metricsGrouped[type];
+                        if (entries.length <= 1) return null;
+                        const typeLabels = { blood_pressure: "Blood Pressure", weight: "Weight", heart_rate: "Heart Rate" };
+                        return (
+                          <div key={type}>
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{typeLabels[type] || type} — History</p>
+                            <ul className="space-y-1.5">
+                              {entries.slice(0, 10).map((entry) => (
+                                <li key={entry._id} className="flex items-center justify-between px-4 py-2 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+                                  <span className="font-medium text-gray-800">
+                                    {type === "blood_pressure"
+                                      ? `${entry.value?.systolic}/${entry.value?.diastolic} ${entry.unit}`
+                                      : `${entry.value} ${entry.unit}`}
+                                  </span>
+                                  <span className="text-gray-400">
+                                    {new Date(entry.recordedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
               )}
 
-              {/* Reports */}
+              {/* ── Medical Reports ─────────────────────────────────────────── */}
               {innerTab === "reports" && (
                 <div>
-                  {(patient.reports || patient.documents || []).length === 0 ? (
+                  {recentReports.length === 0 ? (
                     <EmptyState icon="📁" title="No reports uploaded" subtitle="Patient has no uploaded documents" />
                   ) : (
                     <ul className="space-y-2">
-                      {(patient.reports || patient.documents || []).map((r, i) => (
-                        <li key={i}
+                      {recentReports.map((r, i) => (
+                        <li key={r._id || i}
                           className="flex items-center justify-between px-4 py-3 border border-gray-200 rounded-xl hover:border-blue-200 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                               <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                               </svg>
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">{r.name || r.filename || `Report ${i + 1}`}</p>
-                              <p className="text-xs text-gray-400">{r.type || "Document"}</p>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-800 truncate">{r.title || r.name || `Report ${i + 1}`}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {r.documentType && (
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                                    {r.documentType}
+                                  </span>
+                                )}
+                                <span className="text-xs text-gray-400">
+                                  {r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
+                                </span>
+                                {r.uploadedBy && (
+                                  <span className="text-[10px] text-gray-400">• by {r.uploadedBy}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                          <a href={r.url || r.link || "#"} target="_blank" rel="noreferrer"
-                            className="text-xs text-blue-600 font-semibold hover:underline px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
-                            View ↗
-                          </a>
+                          {r.fileUrl && (
+                            <a href={r.fileUrl} target="_blank" rel="noreferrer"
+                              className="ml-3 shrink-0 text-xs text-blue-600 font-semibold hover:underline px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">
+                              View ↗
+                            </a>
+                          )}
                         </li>
                       ))}
                     </ul>

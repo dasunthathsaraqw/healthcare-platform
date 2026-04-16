@@ -66,6 +66,12 @@ app.get("/health", (req, res) => {
 // ── Routes ─────────────────────────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
 
+// Doctor-facing: read-only patient data (profile, metrics, reports)
+// IMPORTANT: Must be registered BEFORE patientRoutes which has a wildcard /:id
+// Mounted at /api/patients/doctor/patient/:patientId/...
+const doctorViewRoutes = require('./src/routes/doctorViewRoutes');
+app.use("/api/patients/doctor", doctorViewRoutes);
+
 const patientRoutes = require('./src/routes/patientRoutes-auth');
 app.use("/api/patients", patientRoutes);
 
