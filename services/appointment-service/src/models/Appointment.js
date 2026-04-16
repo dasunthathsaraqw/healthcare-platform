@@ -14,7 +14,7 @@ const appointmentSchema = new mongoose.Schema(
       index: true,
     },
 
-    // ── Denormalised display names (avoid cross-service lookups on every read) ─
+    // ── Denormalised display names ──────────────────────────────────────────
     patientName: {
       type: String,
       default: "",
@@ -46,7 +46,7 @@ const appointmentSchema = new mongoose.Schema(
       default: "",
     },
 
-    // ── Status lifecycle: pending → confirmed → completed | cancelled | rejected
+    // ── Status lifecycle ──────────────────────────────────────────────────────
     status: {
       type: String,
       enum: ["pending", "confirmed", "completed", "cancelled", "rejected"],
@@ -104,6 +104,22 @@ const appointmentSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+
+    // ── NEW: Slot management fields ───────────────────────────────────────────
+    availabilityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Availability",
+      default: null,
+      index: true,
+    },
+    slotTime: {
+      type: String,
+      default: null,
+    },
+    slotPosition: {
+      type: Number,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -114,5 +130,6 @@ const appointmentSchema = new mongoose.Schema(
 appointmentSchema.index({ patientId: 1, dateTime: 1 });
 appointmentSchema.index({ doctorId: 1, dateTime: 1 });
 appointmentSchema.index({ doctorId: 1, status: 1 });
+appointmentSchema.index({ availabilityId: 1 }); // NEW index
 
 module.exports = mongoose.model("Appointment", appointmentSchema);
