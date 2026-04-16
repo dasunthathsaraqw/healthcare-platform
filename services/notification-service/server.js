@@ -16,7 +16,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // ── MongoDB Connection ─────────────────────────────────────────────────────────
 mongoose
-  .connect(process.env.DB_URL || "mongodb://notification-db:27017/notificationdb")
+  .connect(process.env.DB_URL || "mongodb://notification-db:27017/notificationdb", {
+    serverSelectionTimeoutMS: 5000 // Prevent requests from hanging if DB is down
+  })
   .then(() => console.log("✅ Notification Service: Connected to MongoDB"))
   .catch((err) => console.error("❌ Notification Service: MongoDB error:", err.message));
 

@@ -117,6 +117,40 @@ exports.deleteMetric = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET METRICS CHART DATA
+// GET /api/patients/metrics/chart?type=blood_pressure&period=30
+// ─────────────────────────────────────────────────────────────────────────────
+
+exports.getMetricsChartData = async (req, res) => {
+  try {
+    const { type, period = 30 } = req.query;
+    const daysAgo = new Date(Date.now() - period * 24 * 60 * 60 * 1000);
+    
+    const metrics = await HealthMetric.find({
+      patientId: req.user._id,
+      type,
+      recordedAt: { $gte: daysAgo }
+    }).sort({ recordedAt: 1 });
+    
+    const chartData = metrics.map(m => ({
+      date: m.recordedAt,
+      value: m.value
+    }));
+    
+    return res.status(200).json({
+      success: true,
+      data: chartData,
+      count: chartData.length,
+      period: `${period} days`,
+      type
+    });
+  } catch (error) {
+    console.error('❌ Get Chart Data Error:', error);
+    return errorResponse(res, 500, 'Failed to fetch chart data.');
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // EXPORT PATIENT DATA (GDPR-style)
 // GET /api/patients/export
 // ─────────────────────────────────────────────────────────────────────────────

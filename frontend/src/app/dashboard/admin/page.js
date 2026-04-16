@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import axios from "axios";
+import api from "@/services/api";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
@@ -84,11 +84,7 @@ export default function AdminDashboard() {
   const fetchAllUsers = useCallback(async () => {
     setLoadingUsers(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/patients/admin/users`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await api.get("/patients/admin/users");
       setUsers(res.data.users || []);
     } catch (err) {
       toast.error("Could not load user list. Please refresh.");
@@ -100,9 +96,7 @@ export default function AdminDashboard() {
   const fetchSystemLogs = useCallback(async () => {
     setLoadingLogs(true);
     try {
-      const res = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/notifications/logs`
-      );
+      const res = await api.get("/notifications/logs");
       setLogs(res.data.logs || []);
     } catch (err) {
       toast.error("Could not load notification logs.");
@@ -123,12 +117,7 @@ export default function AdminDashboard() {
     setActionId(id);
     const loadingToast = toast.loading("Verifying doctor account…");
     try {
-      const token = localStorage.getItem("token");
-      await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL}/patients/admin/doctors/${id}/verify`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.patch(`/patients/admin/doctors/${id}/verify`);
       toast.dismiss(loadingToast);
       toast.success("Doctor verified successfully! ✅");
       fetchAllUsers();
@@ -147,12 +136,7 @@ export default function AdminDashboard() {
     setActionId(id);
     const loadingToast = toast.loading(`${action}ning user…`);
     try {
-      const token = localStorage.getItem("token");
-      await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL}/patients/admin/users/${id}/status`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.patch(`/patients/admin/users/${id}/status`);
       toast.dismiss(loadingToast);
       toast.success(`User ${action.toLowerCase()}ned successfully.`);
       fetchAllUsers();

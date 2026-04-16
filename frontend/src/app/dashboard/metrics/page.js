@@ -1,14 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import axios from "axios";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
-
-function authHeaders() {
-  const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
-  return { Authorization: `Bearer ${t}` };
-}
+import { useState, useEffect, useCallback } from "react";
+import api from "@/services/api";
 
 // ── Metric Type Config ────────────────────────────────────────────────────────
 
@@ -28,6 +21,7 @@ const COLOR_MAP = {
 
 export default function HealthMetricsPage() {
   const [metrics, setMetrics]     = useState([]);
+  const [chartMetrics, setChartMetrics] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
   const [activeType, setActiveType] = useState("blood_pressure");
@@ -42,21 +36,47 @@ export default function HealthMetricsPage() {
   const [formError, setFormError]   = useState("");
   const [success, setSuccess]       = useState("");
 
-  const fetchMetrics = async () => {
+  const activeConfig = METRIC_TYPES.find((t) => t.key === activeType);
+
+  const getArrayFromResponse = (data, key) => {
+    if (Array.isArray(data?.[key])) return data[key];
+    if (Array.isArray(data?.data?.[key])) return data.data[key];
+    if (Array.isArray(data?.data) && key === "data") return data.data;
+    if (Array.isArray(data?.metrics) && key === "metrics") return data.metrics;
+    return [];
+  };
+
+  const fetchMetrics = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/patients/metrics?type=${activeType}&days=${days}`, {
-        headers: authHeaders(),
+      const res = await api.get("/patients/metrics", {
+        params: { type: activeType, days },
       });
-      setMetrics(res.data.metrics || []);
+      setMetrics(getArrayFromResponse(res.data, "metrics"));
     } catch (err) {
       console.error("Failed to load metrics:", err);
+      setMetrics([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeType, days]);
 
-  useEffect(() => { fetchMetrics(); }, [activeType, days]);
+  const fetchChartMetrics = useCallback(async () => {
+    try {
+      const res = await api.get("/patients/metrics/chart", {
+        params: { type: activeType, period: days },
+      });
+      setChartMetrics(getArrayFromResponse(res.data, "data"));
+    } catch (err) {
+      console.error("Failed to load chart metrics:", err);
+      setChartMetrics([]);
+    }
+  }, [activeType, days]);
+
+  useEffect(() => {
+    fetchMetrics();
+    fetchChartMetrics();
+  }, [fetchMetrics, fetchChartMetrics]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -80,13 +100,14 @@ export default function HealthMetricsPage() {
 
     setSaving(true);
     try {
-      await axios.post(`${API_BASE}/patients/metrics`, {
+      await api.post("/patients/metrics", {
         type: activeType, value, unit, notes,
-      }, { headers: authHeaders() });
+      });
 
       setSuccess("Metric logged successfully!");
       setSystolic(""); setDiastolic(""); setWeightVal(""); setHeartRate(""); setNotes("");
-      fetchMetrics();
+      await fetchMetrics();
+      await fetchChartMetrics();
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
       setFormError(err.response?.data?.message || "Failed to log metric.");
@@ -98,21 +119,31 @@ export default function HealthMetricsPage() {
   const handleDelete = async (id) => {
     if (!confirm("Delete this entry?")) return;
     try {
-      await axios.delete(`${API_BASE}/patients/metrics/${id}`, { headers: authHeaders() });
+      await api.delete(`/patients/metrics/${id}`);
       setMetrics((prev) => prev.filter((m) => m._id !== id));
-    } catch {
+      await Promise.all([fetchMetrics(), fetchChartMetrics()]);
+    } catch (err) {
+      console.error("Failed to delete metric:", err);
       alert("Failed to delete.");
     }
   };
 
-  const activeConfig = METRIC_TYPES.find((t) => t.key === activeType);
   const colors = COLOR_MAP[activeConfig?.color || "blue"];
 
   const formatValue = (m) => {
-    if (m.type === "blood_pressure" && m.value?.systolic) {
+    if (!m) return "—";
+
+    if (m.type === "blood_pressure" && m.value && typeof m.value === "object") {
       return `${m.value.systolic}/${m.value.diastolic}`;
     }
     return m.value;
+  };
+
+  const formatRecordedAt = (recordedAt) => {
+    const date = new Date(recordedAt);
+    if (Number.isNaN(date.getTime())) return "Unknown date";
+
+    return `${date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
   };
 
   // Simple stats
@@ -122,6 +153,15 @@ export default function HealthMetricsPage() {
       ? `${Math.round(metrics.reduce((s, m) => s + (m.value?.systolic || 0), 0) / metrics.length)}/${Math.round(metrics.reduce((s, m) => s + (m.value?.diastolic || 0), 0) / metrics.length)}`
       : Math.round(metrics.reduce((s, m) => s + (typeof m.value === 'number' ? m.value : 0), 0) / metrics.length)
     : "—";
+
+  const chartValues = chartMetrics
+    .slice(0, 20)
+    .map((item) => {
+      if (activeType === "blood_pressure") {
+        return typeof item?.value === "object" ? (item.value?.systolic || 0) : 0;
+      }
+      return typeof item?.value === "number" ? item.value : Number(item?.value) || 0;
+    });
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -173,13 +213,13 @@ export default function HealthMetricsPage() {
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Systolic</label>
                     <input type="number" placeholder="120" value={systolic}
                       onChange={(e) => setSystolic(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                      className="w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-all duration-200 border bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 focus:border-blue-500" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Diastolic</label>
                     <input type="number" placeholder="80" value={diastolic}
                       onChange={(e) => setDiastolic(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                      className="w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-all duration-200 border bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 focus:border-blue-500" />
                   </div>
                 </div>
               )}
@@ -189,7 +229,7 @@ export default function HealthMetricsPage() {
                   <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Weight (kg)</label>
                   <input type="number" step="0.1" placeholder="72.5" value={weightVal}
                     onChange={(e) => setWeightVal(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
                 </div>
               )}
 
@@ -198,7 +238,7 @@ export default function HealthMetricsPage() {
                   <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Heart Rate (bpm)</label>
                   <input type="number" placeholder="72" value={heartRate}
                     onChange={(e) => setHeartRate(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
                 </div>
               )}
 
@@ -206,7 +246,7 @@ export default function HealthMetricsPage() {
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Notes (optional)</label>
                 <input type="text" placeholder="After morning walk..." value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
               </div>
 
               {formError && <p className="text-xs text-red-500 font-medium">{formError}</p>}
@@ -242,27 +282,29 @@ export default function HealthMetricsPage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-gray-900">Trend Overview</h2>
               <select value={days} onChange={(e) => setDays(Number(e.target.value))}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200">
-                <option value={7}>Last 7 days</option>
-                <option value={14}>Last 14 days</option>
-                <option value={30}>Last 30 days</option>
-                <option value={90}>Last 90 days</option>
+                className="px-3 py-1.5 rounded-lg text-xs outline-none transition-all duration-200 border bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 focus:border-blue-500">
+                <option className="bg-white text-gray-900" value={7}>Last 7 days</option>
+                <option className="bg-white text-gray-900" value={14}>Last 14 days</option>
+                <option className="bg-white text-gray-900" value={30}>Last 30 days</option>
+                <option className="bg-white text-gray-900" value={90}>Last 90 days</option>
               </select>
             </div>
             {/* Visual bar chart placeholder */}
-            <div className="h-40 bg-gradient-to-t from-gray-50 to-white rounded-xl border-2 border-dashed border-gray-200 flex items-end justify-center gap-1 px-4 pb-4">
-              {metrics.length === 0 ? (
+            <div className="h-40 bg-linear-to-t from-gray-50 to-white rounded-xl border-2 border-dashed border-gray-200 flex items-end justify-center gap-1 px-4 pb-4">
+              {chartValues.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <p className="text-xs text-gray-400 font-medium">No data for this period</p>
                   <p className="text-[10px] text-gray-300 mt-0.5">Log entries to see your trend</p>
                 </div>
               ) : (
-                metrics.slice(0, 20).reverse().map((m, i) => {
-                  const val = m.type === "blood_pressure" ? (m.value?.systolic || 0) : (typeof m.value === 'number' ? m.value : 0);
-                  const maxVal = m.type === "blood_pressure" ? 200 : m.type === "weight" ? 150 : 200;
+                chartMetrics.slice(0, 20).map((m, i) => {
+                  const val = activeType === "blood_pressure"
+                    ? (typeof m.value === "object" ? (m.value?.systolic || 0) : 0)
+                    : (typeof m.value === 'number' ? m.value : Number(m.value) || 0);
+                  const maxVal = activeType === "blood_pressure" ? 200 : activeType === "weight" ? 150 : 200;
                   const pct = Math.min(100, Math.max(10, (val / maxVal) * 100));
                   return (
-                    <div key={m._id} className="flex-1 max-w-3 flex flex-col items-center gap-1">
+                    <div key={m._id || m.date || i} className="flex-1 max-w-3 flex flex-col items-center gap-1">
                       <div
                         className={`w-full rounded-t-sm ${colors.bar} opacity-70 hover:opacity-100 transition-opacity duration-200`}
                         style={{ height: `${pct}%` }}
@@ -294,7 +336,7 @@ export default function HealthMetricsPage() {
                 <p className="text-xs text-gray-400 mt-1">Use the form on the left to log your first reading.</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
+              <div className="divide-y divide-gray-100 max-h-100 overflow-y-auto">
                 {metrics.map((m) => (
                   <div key={m._id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/60 transition-colors duration-200">
                     <div className="flex items-center gap-3 min-w-0">
@@ -306,12 +348,12 @@ export default function HealthMetricsPage() {
                           {formatValue(m)} <span className="text-xs font-normal text-gray-400">{m.unit}</span>
                         </p>
                         <p className="text-[10px] text-gray-400 truncate">
-                          {new Date(m.recordedAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {new Date(m.recordedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                          {formatRecordedAt(m.recordedAt)}
                           {m.notes ? ` · ${m.notes}` : ""}
                         </p>
                       </div>
                     </div>
-                    <button onClick={() => handleDelete(m._id)}
+                    <button type="button" onClick={() => handleDelete(m._id)}
                       className="text-[10px] text-red-400 hover:text-red-600 font-semibold hover:underline transition-colors shrink-0">
                       Delete
                     </button>

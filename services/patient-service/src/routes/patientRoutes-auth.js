@@ -1,6 +1,7 @@
 // src/routes/patientRoutes-auth.js
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const patientController = require('../controllers/patientController');
 const { authenticate, authorize, ROLES } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -14,11 +15,27 @@ const {
 router.use(authenticate);
 
 // Report Routes
-// Notice how we inject 'upload.single("document")' right before the controller!
+// Notice how we wrap 'upload.single("document")' to prevent infinite hangs!
+// POST /reports
+// POST /reports - with diagnostic logging
 router.post(
-  '/reports', 
-  authorize(ROLES.PATIENT, ROLES.DOCTOR), 
-  upload.single('document'), // 'document' is the name of the form field the frontend must use
+  '/reports',
+  authorize(ROLES.PATIENT, ROLES.DOCTOR),
+  (req, res, next) => {
+    console.log('[DEBUG] Before multer - Content-Type:', req.headers['content-type']);
+    console.log('[DEBUG] Before multer - Body keys:', req.body ? Object.keys(req.body) : 'req.body is null/undefined');
+    console.log('[DEBUG] Before multer - Is multipart?', req.is('multipart'));
+    next();
+  },
+  upload.single('document'),
+  (req, res, next) => {
+    console.log('[DEBUG] After multer - req.file:', req.file ? 'present' : 'undefined');
+    console.log('[DEBUG] After multer - req.body:', req.body || 'null/undefined');
+    if (!req.file) {
+      console.log('[DEBUG] No file attached! Check field name or file size.');
+    }
+    next();
+  },
   patientController.uploadMedicalReport
 );
 
@@ -35,6 +52,20 @@ router.delete(
 );
 
 
+// Prescription Routes
+router.get(
+  '/prescriptions',
+  authorize(ROLES.PATIENT),
+  patientController.getMyPrescriptions
+);
+
+// Report Sharing
+router.post(
+  '/reports/:id/share',
+  authorize(ROLES.PATIENT),
+  patientController.generateShareLink
+);
+
 // Medical History & Dashboard Routes
 router.put(
   '/history',
@@ -50,11 +81,14 @@ router.get(
   patientController.getPatientDashboard
 );
 
-// Cross-service: Doctor service calls this to get patient profile
+// Export Data
 router.get(
-  '/:id',
-  patientController.getPatientById
+  '/export',
+  authorize(ROLES.PATIENT, ROLES.DOCTOR, ROLES.ADMIN),
+  patientController.exportUserData
 );
+
+// Moved cross-service route further down to prevent route shadowing
 
 // ==========================================
 // ADMIN ONLY ROUTES
@@ -77,6 +111,21 @@ router.patch(
   '/admin/users/:id/status', 
   authorize(ROLES.ADMIN), 
   adminController.toggleUserStatus
+);
+
+// ==========================================
+// CROSS-SERVICE ROUTES
+// ==========================================
+// Doctor service calls this to get patient profile. 
+// Kept at the bottom so /:id does not shadow other routes like /admin/... or /metrics via router merging.
+router.get(
+  '/:id',
+  (req, res, next) => {
+    // Skip this route for non-ObjectId values so paths like /metrics can be handled by other routers.
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return next('route');
+    next();
+  },
+  patientController.getPatientById
 );
 
 module.exports = router;

@@ -160,6 +160,7 @@ export default function ReportsPage() {
           headers: {
             "Content-Type": "multipart/form-data",
           },
+          timeout: 120000,
           onUploadProgress: (e) => {
             const pct = Math.round((e.loaded * 100) / e.total);
             setUploadProgress(pct);
@@ -239,10 +240,10 @@ export default function ReportsPage() {
                       value={title}
                       onChange={(e) => { setTitle(e.target.value); setTitleError(""); }}
                       placeholder="e.g., Blood Test — April 2026"
-                      className={`w-full p-2.5 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${
+                      className={`w-full p-2.5 border rounded-lg text-sm focus:ring-2 outline-none transition-all bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 focus:border-blue-500 ${
                         titleError
                           ? "border-red-400 bg-red-50 focus:ring-red-400"
-                          : "border-gray-200 focus:ring-blue-500 bg-gray-50 focus:bg-white"
+                          : ""
                       }`}
                     />
                     {titleError && (
@@ -258,10 +259,10 @@ export default function ReportsPage() {
                     <select
                       value={documentType}
                       onChange={(e) => setDocumentType(e.target.value)}
-                      className="w-full p-2.5 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all"
+                      className="w-full p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all border bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 focus:border-blue-500"
                     >
                       {Object.keys(DOC_ICONS).map((t) => (
-                        <option key={t} value={t}>{t}</option>
+                        <option className="bg-white text-gray-900" key={t} value={t}>{t}</option>
                       ))}
                     </select>
                   </div>
@@ -277,7 +278,7 @@ export default function ReportsPage() {
                       onChange={handleFileChange}
                       accept=".pdf,.jpg,.jpeg,.png"
                       ref={fileInputRef}
-                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition cursor-pointer"
+                      className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition cursor-pointer border rounded-lg p-2.5 bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 focus:border-blue-500"
                     />
                     {file && !fileError && (
                       <p className="mt-1 text-xs text-green-600 flex items-center gap-1">

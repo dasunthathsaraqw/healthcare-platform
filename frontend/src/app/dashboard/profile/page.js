@@ -62,8 +62,8 @@ function FormInput({ label, id, error, ...props }) {
       </label>
       <input
         id={id}
-        className={`w-full p-2.5 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none text-sm ${
-          error ? "border-red-400 bg-red-50 focus:ring-red-400" : "border-gray-200"
+        className={`w-full p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 transition-all outline-none text-sm bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 border ${
+          error ? "border-red-400 bg-red-50 focus:ring-red-400" : ""
         }`}
         {...props}
       />
@@ -393,10 +393,10 @@ export default function ProfilePage() {
                               setConditionError("");
                             }}
                             placeholder="e.g., Asthma, Penicillin Allergy..."
-                            className={`w-full p-2.5 border rounded-lg focus:ring-2 outline-none text-sm transition-all ${
+                            className={`w-full p-2.5 border rounded-lg focus:ring-2 outline-none text-sm transition-all bg-white text-gray-900 border-gray-300 placeholder-gray-400 focus:text-gray-900 ${
                               conditionError
                                 ? "border-red-400 focus:ring-red-400 bg-red-50"
-                                : "border-gray-300 focus:ring-blue-500"
+                                : "focus:ring-blue-500"
                             }`}
                           />
                           {conditionError && (

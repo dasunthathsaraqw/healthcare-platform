@@ -43,6 +43,11 @@ const handleProxy = (targetUrl, routeName) => (req, res) => {
     `🔄 Proxying ${req.method} ${routeName}${req.url} to ${targetUrl}${routeName}${req.url}`,
   );
 
+  const contentType = req.headers["content-type"] || "";
+  const isJson = contentType.includes("application/json");
+  const shouldStreamBody =
+    ["POST", "PUT", "PATCH"].includes(req.method) && !isJson;
+
   const url = new URL(`${targetUrl}${routeName}${req.url}`);
   const options = {
     hostname: url.hostname,
@@ -55,6 +60,11 @@ const handleProxy = (targetUrl, routeName) => (req, res) => {
     },
   };
 
+  // For parsed JSON bodies, let Node set transfer headers instead of forwarding stale browser values.
+  if (!shouldStreamBody) {
+    delete options.headers["content-length"];
+  }
+
   const proxyReq = http.request(options, (proxyRes) => {
     res.status(proxyRes.statusCode);
     // Forward headers from the microservice back to the client
@@ -65,6 +75,11 @@ const handleProxy = (targetUrl, routeName) => (req, res) => {
     proxyRes.pipe(res); // Stream the response directly for better performance
   });
 
+  // Allow larger request windows for report/document uploads.
+  proxyReq.setTimeout(120000, () => {
+    proxyReq.destroy(new Error("Upstream request timed out"));
+  });
+
   proxyReq.on("error", (err) => {
     console.error(`[${routeName}] Proxy error:`, err);
     if (!res.headersSent) {
@@ -72,9 +87,15 @@ const handleProxy = (targetUrl, routeName) => (req, res) => {
     }
   });
 
+  if (shouldStreamBody) {
+    req.pipe(proxyReq);
+    return;
+  }
+
   // Handle request body
   if (req.body && Object.keys(req.body).length > 0) {
-    proxyReq.write(JSON.stringify(req.body));
+    const body = JSON.stringify(req.body);
+    proxyReq.write(body);
   }
   proxyReq.end();
 };

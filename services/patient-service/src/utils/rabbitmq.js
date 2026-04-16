@@ -11,7 +11,13 @@ const connectRabbitMQ = async () => {
     
     // We create a queue specifically for notifications. 
     // durable: true means the queue survives if RabbitMQ restarts!
-    await channel.assertQueue('notification_queue', { durable: true });
+    await channel.assertQueue('notification_queue', { 
+      durable: true,
+      arguments: {
+        'x-dead-letter-exchange': 'notification_dlx',
+        'x-dead-letter-routing-key': 'notification_dead_letter_queue',
+      }
+    });
     
     console.log('✅ Patient Service: Connected to RabbitMQ');
   } catch (error) {
