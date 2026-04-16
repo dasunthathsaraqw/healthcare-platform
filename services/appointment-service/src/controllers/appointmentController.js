@@ -679,45 +679,67 @@ const updateAppointmentStatus = async (req, res) => {
 
 const cancelAppointment = async (req, res) => {
   try {
+    const { reason } = req.body;
     const appointment = await Appointment.findById(req.params.id);
 
     if (!appointment) {
-      return res.status(404).json({
-        success: false,
-        message: "Appointment not found.",
+      return res.status(404).json({ success: false, message: "Appointment not found" });
+    }
+
+    // Only confirmed appointments can be cancelled
+    if (appointment.status !== "confirmed") {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Only confirmed appointments can be cancelled" 
       });
     }
 
-    // Only the owning patient or an admin can cancel
-    const requesterId = req.user.id;
-    if (
-      appointment.patientId !== requesterId &&
-      req.user.role !== "admin"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "You can only cancel your own appointments.",
-      });
+    // Calculate hours before appointment
+    const hoursBefore = (appointment.dateTime - new Date()) / (1000 * 60 * 60);
+    
+    // Calculate refund amount based on time
+    let refundAmount = 0;
+    let refundPercentage = 0;
+    
+    if (hoursBefore >= 24) {
+      refundPercentage = 100;
+      refundAmount = appointment.consultationFee;
+    } else if (hoursBefore >= 12) {
+      refundPercentage = 50;
+      refundAmount = appointment.consultationFee * 0.5;
+    } else if (hoursBefore >= 6) {
+      refundPercentage = 25;
+      refundAmount = appointment.consultationFee * 0.25;
+    } else {
+      refundPercentage = 0;
+      refundAmount = 0;
     }
 
-    if (["completed", "cancelled", "rejected"].includes(appointment.status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot cancel an appointment that is already ${appointment.status}.`,
-      });
-    }
-
-    appointment.status = "cancelled";
-    if (req.body.reason) {
-      appointment.cancellationReason = req.body.reason;
-    }
+    // Update appointment
+    appointment.status = "cancellation_requested";
+    appointment.cancellationReason = reason;
+    appointment.cancelledAt = new Date();
+    appointment.refundRequested = true;
+    appointment.refundAmount = refundAmount;
+    appointment.refundRequestedAt = new Date();
+    
     await appointment.save();
+
+    // TODO: Send email to admin (you can implement this later)
+    console.log(`📧 Refund request for appointment ${appointment._id}: Rs. ${refundAmount} (${refundPercentage}%)`);
+    console.log(`   Reason: ${reason}`);
 
     return res.status(200).json({
       success: true,
-      message: "Appointment cancelled successfully.",
+      message: refundAmount > 0 
+        ? `Cancellation request submitted. Refund of Rs. ${refundAmount} (${refundPercentage}%) pending admin approval.`
+        : "Appointment cancelled. No refund applicable.",
       appointment,
+      refundAmount,
+      refundPercentage,
+      requiresAdminApproval: refundAmount > 0
     });
+
   } catch (error) {
     return handleError(res, error, "Failed to cancel appointment");
   }

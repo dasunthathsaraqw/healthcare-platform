@@ -29,11 +29,13 @@ function getInitials(name = "") {
   return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "DR";
 }
 
+// Updated status styles with cancellation_requested
 const STATUS_STYLES = {
   confirmed: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500", label: "Confirmed" },
   completed: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500", label: "Completed" },
   cancelled: { bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200", dot: "bg-gray-400", label: "Cancelled" },
   rejected:  { bg: "bg-red-50",   text: "text-red-600",  border: "border-red-200",   dot: "bg-red-400",   label: "Rejected"  },
+  cancellation_requested: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500", label: "Cancellation Requested" },
 };
 
 function AppointmentCard({ appt, onClick }) {
@@ -63,6 +65,14 @@ function AppointmentCard({ appt, onClick }) {
         {appt.patientNumber && (
           <p className="text-[10px] text-gray-400 mt-1">Patient #{appt.patientNumber}</p>
         )}
+        {/* Show refund pending badge */}
+        {appt.refundAmount > 0 && appt.status === "cancellation_requested" && (
+          <div className="mt-2 px-2 py-1 bg-amber-50 border border-amber-100 rounded-lg inline-block">
+            <p className="text-[9px] text-amber-600">
+              Refund requested: Rs. {appt.refundAmount}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -79,7 +89,7 @@ function AppointmentCard({ appt, onClick }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// APPOINTMENT DETAIL MODAL
+// APPOINTMENT DETAIL MODAL (with refund info in cancellation)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
@@ -111,6 +121,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
       
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-[scaleIn_0.2s_ease-out]">
+        {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white relative">
           <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,7 +141,9 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
           </div>
         </div>
 
+        {/* Content */}
         <div className="p-8 space-y-8">
+          {/* Status and Time Row */}
           <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between bg-slate-50 p-5 rounded-2xl border border-slate-100">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">When</p>
@@ -144,9 +157,15 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                 <span className={`w-2 h-2 rounded-full ${sc.dot}`} />
                 {sc.label}
               </span>
+              {appt.refundAmount > 0 && appt.status === "cancellation_requested" && (
+                <p className="text-[10px] text-amber-600 font-semibold mt-1">
+                  Refund: Rs. {appt.refundAmount} pending admin approval
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Fee Display */}
           {appt.consultationFee > 0 && (
             <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100">
               <span className="text-sm font-semibold text-gray-700">Amount Paid</span>
@@ -154,6 +173,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
             </div>
           )}
 
+          {/* Reason for Visit */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -168,6 +188,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
             </div>
           </div>
 
+          {/* Guest Info if applicable */}
           {appt.isForSomeoneElse && appt.bookedFor?.name && (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -184,9 +205,11 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
             </div>
           )}
 
+          {/* Actions */}
           <div className="space-y-3 pt-2">
             {cancelStep === "view" ? (
               <>
+                {/* Join Meeting for confirmed appointments */}
                 {status === "confirmed" && appt.meetingLink && (
                   <button 
                     onClick={handleJoinMeeting}
@@ -221,6 +244,39 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
               </>
             ) : (
               <div className="space-y-4 animate-[slideUp_0.2s_ease-out]">
+                {/* Refund Information Display */}
+                <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                  <p className="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Refund Policy
+                  </p>
+                  <div className="space-y-1 text-xs text-amber-600">
+                    <p className="flex justify-between">
+                      <span>✓ 24+ hours before:</span>
+                      <span className="font-semibold">100% refund</span>
+                    </p>
+                    <p className="flex justify-between">
+                      <span>✓ 12-24 hours before:</span>
+                      <span className="font-semibold">50% refund</span>
+                    </p>
+                    <p className="flex justify-between">
+                      <span>✓ 6-12 hours before:</span>
+                      <span className="font-semibold">25% refund</span>
+                    </p>
+                    <p className="flex justify-between">
+                      <span>✗ Less than 6 hours:</span>
+                      <span className="font-semibold">No refund</span>
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-amber-200">
+                    <p className="text-[10px] text-amber-500">
+                      Refunds require admin approval and will be processed within 3-5 business days
+                    </p>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
                     Please provide a reason for cancellation
@@ -233,6 +289,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                     className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-200 transition-all resize-none h-24"
                   />
                 </div>
+                
                 <div className="flex gap-3">
                   <button 
                     onClick={() => setCancelStep("view")}
@@ -250,7 +307,14 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                       </svg>
-                    ) : "Confirm Cancellation"}
+                    ) : (
+                      <>
+                        Request Cancellation
+                        {appt.consultationFee > 0 && (
+                          <span className="text-[10px] opacity-80">(Refund eligibility checked)</span>
+                        )}
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -275,7 +339,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STAT CARD COMPONENT (Matching Dashboard)
+// STAT CARD COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STAT_THEME = {
@@ -315,6 +379,7 @@ export default function AppointmentsPage() {
   const [cancelling, setCancelling] = useState(null);
   const [selectedAppt, setSelectedAppt] = useState(null);
   const [error, setError] = useState("");
+  const [showRefundAlert, setShowRefundAlert] = useState(null);
 
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
@@ -335,12 +400,13 @@ export default function AppointmentsPage() {
         all = [...all, ...pastData];
       }
       
-      const paidAppointments = all.filter(a => 
-        a.status === "confirmed" || a.status === "completed"
+      // Filter: Only show confirmed, completed, or cancellation_requested
+      const validAppointments = all.filter(a => 
+        a.status === "confirmed" || a.status === "completed" || a.status === "cancellation_requested"
       );
       
-      paidAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
-      setAppointments(paidAppointments);
+      validAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+      setAppointments(validAppointments);
     } catch (err) {
       console.error("Fetch error:", err);
       setError("Unable to load appointments. Please refresh.");
@@ -356,16 +422,33 @@ export default function AppointmentsPage() {
   const handleCancel = async (id, reason) => {
     setCancelling(id);
     try {
-      await axios.put(`${API_BASE}/appointments/${id}/cancel`, { reason }, { headers: authHeaders() });
+      const response = await axios.put(`${API_BASE}/appointments/${id}/cancel`, { reason }, { headers: authHeaders() });
+      
+      // Show appropriate message based on refund eligibility
+      if (response.data.refundAmount > 0) {
+        setShowRefundAlert({
+          type: "refund",
+          amount: response.data.refundAmount,
+          percentage: response.data.refundPercentage,
+          message: `Cancellation request submitted!\n\nRefund Amount: Rs. ${response.data.refundAmount} (${response.data.refundPercentage}%)\n\nYour request has been sent to admin for approval. You will receive the refund within 3-5 business days after approval.`
+        });
+        alert(response.data.message);
+      } else {
+        alert(`Appointment cancelled successfully.\n\nNo refund applicable for this cancellation.`);
+      }
+      
       await fetchAppointments();
       setSelectedAppt(null);
     } catch (err) {
-      setError("Failed to cancel. Please try again.");
+      const errorMessage = err.response?.data?.message || "Failed to cancel. Please try again.";
+      setError(errorMessage);
+      alert(errorMessage);
     } finally {
       setCancelling(null);
     }
   };
 
+  // Split appointments into upcoming and past
   const now = new Date();
   const upcoming = appointments.filter(a => {
     const aptDate = new Date(a.dateTime);
@@ -374,11 +457,12 @@ export default function AppointmentsPage() {
   
   const past = appointments.filter(a => {
     const aptDate = new Date(a.dateTime);
-    return aptDate < now || a.status === "cancelled" || a.status === "rejected";
+    return aptDate < now || a.status === "cancelled" || a.status === "rejected" || a.status === "cancellation_requested";
   }).sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
 
   const totalUpcoming = upcoming.length;
   const totalPast = past.length;
+  const pendingCancellations = appointments.filter(a => a.status === "cancellation_requested").length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -391,7 +475,7 @@ export default function AppointmentsPage() {
         cancelling={cancelling}
       />
 
-      {/* Header - Matching Dashboard */}
+      {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-cyan-600 px-4 sm:px-6 pt-10 pb-16 relative overflow-hidden">
         <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-white/5 blur-2xl" />
         <div className="absolute bottom-0 left-10 w-32 h-32 rounded-full bg-cyan-400/10 blur-xl" />
@@ -411,8 +495,8 @@ export default function AppointmentsPage() {
             </Link>
           </div>
 
-          {/* Stats Cards - Matching Dashboard style */}
-          <div className="grid grid-cols-2 gap-3 mt-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-3 gap-3 mt-6">
             <StatCard 
               loading={loading} 
               label="Upcoming" 
@@ -435,6 +519,17 @@ export default function AppointmentsPage() {
                 </svg>
               }
             />
+            <StatCard 
+              loading={loading} 
+              label="Pending Cancellations" 
+              value={pendingCancellations} 
+              color="amber"
+              icon={
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              }
+            />
           </div>
         </div>
       </div>
@@ -452,7 +547,25 @@ export default function AppointmentsPage() {
           </div>
         )}
 
-        {/* Upcoming Appointments Section - Matching Dashboard style */}
+        {/* Pending Cancellations Alert */}
+        {pendingCancellations > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <div>
+                <p className="text-sm font-bold text-amber-800">Cancellation Request Pending</p>
+                <p className="text-xs text-amber-700">
+                  You have {pendingCancellations} cancellation request{pendingCancellations !== 1 ? "s" : ""} awaiting admin approval.
+                  Refunds will be processed within 3-5 business days.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Upcoming Appointments */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-blue-50/40">
             <div>
@@ -498,12 +611,12 @@ export default function AppointmentsPage() {
           </div>
         </div>
 
-        {/* Past Appointments Section - Matching Dashboard style */}
+        {/* Past Appointments */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/60">
             <div>
               <h2 className="text-sm font-bold text-gray-900">Past Appointments</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Completed & history</p>
+              <p className="text-xs text-gray-400 mt-0.5">Completed, cancelled, or pending cancellation</p>
             </div>
             {past.length > 0 && <span className="text-xs text-gray-400 font-medium">{past.length} total</span>}
           </div>
