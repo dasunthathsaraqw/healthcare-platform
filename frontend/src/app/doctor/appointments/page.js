@@ -516,7 +516,9 @@ function AppointmentCard({ appt, onAccept, onReject, onDelete, onViewDetails, ac
 
           {/* Confirmed: start consultation in window */}
           {status === "confirmed" && inWindow && (
-            <button className="px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white text-xs font-bold
+            <button 
+              onClick={() => window.location.href = `/doctor/consultation/${appt._id}`}
+              className="px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white text-xs font-bold
               transition-colors shadow-sm shadow-green-200 flex items-center gap-1.5 animate-pulse">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
