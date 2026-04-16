@@ -1,80 +1,77 @@
-// services/payment-service/src/utils/payhereHelper.js
-
 const crypto = require("crypto");
 
 /**
- * Generate MD5 hash - uppercase hex
+ * Generate MD5 hash - EXACTLY like Java's implementation
+ * Java uses: to_upper_case(md5(input))
  */
-const md5 = (str) => {
-  return crypto.createHash("md5").update(str).digest("hex").toUpperCase();
+const generateMD5 = (input) => {
+  return crypto.createHash("md5").update(input).digest("hex").toUpperCase();
 };
 
 /**
- * Generate payment initiation hash
- * 
- * IMPORTANT: PayHere expects EXACTLY this format:
- * MD5(merchant_id + order_id + amount + currency + MD5(secret))
- * 
- * No extra spaces, no decimal padding issues
+ * Generate payment hash - EXACTLY matching Java's generatePaymentHash()
+ * Formula: to_upper_case(md5(merchant_id + order_id + amount + currency + to_upper_case(md5(merchant_secret))))
  */
-const generateInitiateHash = (merchantId, orderId, amount, currency) => {
-  const secret = process.env.PAYHERE_MERCHANT_SECRET;
-  if (!secret) throw new Error("PAYHERE_MERCHANT_SECRET not set");
+const generatePaymentHash = (orderId, amount, currency) => {
+  const merchantId = process.env.PAYHERE_MERCHANT_ID;
+  const merchantSecret = process.env.PAYHERE_MERCHANT_SECRET;
+  
+  if (!merchantId || !merchantSecret) {
+    throw new Error("PAYHERE_MERCHANT_ID or SECRET not set");
+  }
 
-  // Convert to string and trim
-  const merchantIdStr = String(merchantId).trim();
-  const orderIdStr = String(orderId).trim();
-  // Format amount: remove trailing zeros after decimal, keep 2 decimals max
-  const amountNum = parseFloat(amount);
-  const amountStr = amountNum.toFixed(2);
-  const currencyStr = String(currency).trim();
+  // Format amount to 2 decimal places (same as Java's DecimalFormat("0.00"))
+  const amountFormatted = Number(amount).toFixed(2);
   
-  // Step 1: Hash the secret
-  const hashedSecret = md5(secret);
+  // Step 1: Hash the merchant secret (same as Java)
+  const hashedSecret = generateMD5(merchantSecret);
   
-  // Step 2: Concatenate in EXACT order
-  const data = merchantIdStr + orderIdStr + amountStr + currencyStr + hashedSecret;
+  // Step 2: Concatenate in EXACT order (same as Java)
+  const data = merchantId + orderId + amountFormatted + currency + hashedSecret;
   
-  // Step 3: Final hash
-  const hash = md5(data);
+  // Step 3: Final hash (same as Java)
+  const hash = generateMD5(data);
   
-  console.log("🔐 Hash generation details:", {
-    merchantId: merchantIdStr,
-    orderId: orderIdStr,
-    amount: amountStr,
-    currency: currencyStr,
-    hashedSecret: hashedSecret.substring(0, 8) + "...",
-    dataString: merchantIdStr + "+" + orderIdStr + "+" + amountStr + "+" + currencyStr + "+[HASHED_SECRET]",
-    hash
-  });
+  console.log("🔐 PAYHERE HASH GENERATION (Java-compatible):");
+  console.log(`   - Merchant ID: ${merchantId}`);
+  console.log(`   - Order ID: ${orderId}`);
+  console.log(`   - Amount: ${amountFormatted}`);
+  console.log(`   - Currency: ${currency}`);
+  console.log(`   - Hashed Secret: ${hashedSecret}`);
+  console.log(`   - Data String: ${merchantId}+${orderId}+${amountFormatted}+${currency}+[HASHED]`);
+  console.log(`   - Final Hash: ${hash}`);
   
   return hash;
 };
 
 /**
- * Verify webhook signature from PayHere notify callback
+ * Verify webhook signature - EXACTLY matching Java's verifyWebhookSignature()
  */
 const verifyNotifyHash = (body) => {
   const { merchant_id, order_id, payhere_amount, payhere_currency, status_code, md5sig } = body;
-  const secret = process.env.PAYHERE_MERCHANT_SECRET;
-  if (!secret) return false;
-
-  const hashedSecret = md5(secret);
-  const data = String(merchant_id) + String(order_id) + String(payhere_amount) + String(payhere_currency) + String(status_code) + hashedSecret;
-  const localHash = md5(data);
-
-  console.log("🔐 Webhook verification:", { 
-    received: md5sig, 
-    computed: localHash, 
-    match: localHash === md5sig,
-    dataParts: { merchant_id, order_id, payhere_amount, payhere_currency, status_code }
-  });
+  const merchantSecret = process.env.PAYHERE_MERCHANT_SECRET;
   
-  return localHash === md5sig;
+  if (!merchantSecret) return false;
+
+  // Generate hash of merchant secret (same as Java)
+  const hashedSecret = generateMD5(merchantSecret);
+  
+  // Generate local hash (same as Java)
+  const data = merchant_id + order_id + payhere_amount + payhere_currency + status_code + hashedSecret;
+  const localHash = generateMD5(data);
+  
+  const isValid = localHash === md5sig;
+  
+  console.log("🔐 WEBHOOK VERIFICATION (Java-compatible):");
+  console.log(`   - Received Hash: ${md5sig}`);
+  console.log(`   - Local Hash: ${localHash}`);
+  console.log(`   - Valid: ${isValid}`);
+  
+  return isValid;
 };
 
 /**
- * Get PayHere checkout URL based on sandbox mode
+ * Get PayHere checkout URL based on mode
  */
 const getCheckoutUrl = () => {
   return process.env.PAYHERE_SANDBOX === "true"
@@ -82,4 +79,4 @@ const getCheckoutUrl = () => {
     : "https://www.payhere.lk/pay/checkout";
 };
 
-module.exports = { generateInitiateHash, verifyNotifyHash, getCheckoutUrl };
+module.exports = { generatePaymentHash, verifyNotifyHash, getCheckoutUrl };
