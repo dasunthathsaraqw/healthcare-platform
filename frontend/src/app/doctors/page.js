@@ -12,17 +12,26 @@ function authHeaders() {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+// ── Helper: get current logged-in user from localStorage ─────────────────────
+function getCurrentUser() {
+  try {
+    const userStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+    if (userStr) return JSON.parse(userStr);
+  } catch (e) {}
+  return { name: "", email: "", id: "" };
+}
+
 // ── Helper: Time conversion ───────────────────────────────────────────────────
 const timeToMinutes = (timeStr) => {
   if (!timeStr) return 0;
-  const [hours, minutes] = timeStr.split(':').map(Number);
+  const [hours, minutes] = timeStr.split(":").map(Number);
   return hours * 60 + minutes;
 };
 
 const minutesToTime = (minutes) => {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}`;
 };
 
 const generateTimeSlots = (startTime, endTime, slotDuration) => {
@@ -30,7 +39,6 @@ const generateTimeSlots = (startTime, endTime, slotDuration) => {
   const startMinutes = timeToMinutes(startTime);
   const endMinutes = timeToMinutes(endTime);
   const duration = slotDuration || 30;
-  
   for (let minutes = startMinutes; minutes < endMinutes; minutes += duration) {
     slots.push(minutesToTime(minutes));
   }
@@ -127,14 +135,8 @@ function ToastContainer({ toasts, removeToast }) {
 
 function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking }) {
   const [reason, setReason] = useState("");
-  const [err, setErr]       = useState("");
-
-  const [guestInfo, setGuestInfo] = useState({
-    isForOthers: false,
-    name: "",
-    age: "",
-    email: ""
-  });
+  const [err, setErr] = useState("");
+  const [guestInfo, setGuestInfo] = useState({ isForOthers: false, name: "", age: "", email: "" });
 
   useEffect(() => {
     if (open) {
@@ -146,11 +148,7 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
 
   const handleSubmit = () => {
     if (!reason.trim()) { setErr("Please describe your reason for visit."); return; }
-    onConfirm({
-      reason: reason.trim(),
-      isForOthers: guestInfo.isForOthers,
-      guestInfo,
-    });
+    onConfirm({ reason: reason.trim(), isForOthers: guestInfo.isForOthers, guestInfo });
   };
 
   if (!open || !doctor || !slot || typeof window === "undefined") return null;
@@ -327,9 +325,9 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              ["Date",     formattedDate],
-              ["Time",     slot.startTime],
-              ["Duration", `${slot.slotDuration || 30} min`],
+              ["Date",           formattedDate],
+              ["Time",           slot.startTime],
+              ["Duration",       `${slot.slotDuration || 30} min`],
               ["Reservation ID", reservationId ? `#${reservationId.slice(-8).toUpperCase()}` : "—"],
             ].map(([label, val]) => (
               <div key={label} className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3">
@@ -339,19 +337,31 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
             ))}
           </div>
 
-          {bookingInfo?.isForSomeoneElse && bookingInfo?.bookedFor?.name && (
-            <div className="flex items-start gap-2 px-4 py-3 bg-purple-50 border border-purple-100 rounded-xl">
-              <svg className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-              </svg>
-              <div>
-                <p className="text-xs font-bold text-purple-700">Booked for {bookingInfo.bookedFor.name}</p>
-                {bookingInfo.bookedFor.email && (
-                  <p className="text-[10px] text-purple-500">{bookingInfo.bookedFor.email}</p>
-                )}
+          {/* Patient info summary */}
+          <div className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">Patient</p>
+            {bookingInfo?.isForSomeoneElse && bookingInfo?.bookedFor?.name ? (
+              <div className="flex items-center gap-2">
+                <svg className="w-3.5 h-3.5 text-purple-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+                <div>
+                  <p className="text-xs font-bold text-gray-800">{bookingInfo.bookedFor.name}</p>
+                  {bookingInfo.bookedFor.email && <p className="text-[10px] text-gray-500">{bookingInfo.bookedFor.email}</p>}
+                </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="flex items-center gap-2">
+                <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+                <div>
+                  <p className="text-xs font-bold text-gray-800">{bookingInfo?.loggedInUser?.name || "You"}</p>
+                  {bookingInfo?.loggedInUser?.email && <p className="text-[10px] text-gray-500">{bookingInfo.loggedInUser.email}</p>}
+                </div>
+              </div>
+            )}
+          </div>
 
           {hasFee ? (
             <>
@@ -472,7 +482,7 @@ function BookingSuccess({ open, doctor, date, slot, onClose, onDashboard }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DOCTOR PROFILE MODAL (UPDATED with proper slot management)
+// DOCTOR PROFILE MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 
 function DoctorProfileModal({ open, doctor, onClose, onBook }) {
@@ -481,58 +491,47 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
   const [loadSlots, setLoadSlots] = useState(false);
   const [selSlot, setSelSlot] = useState(null);
 
-const fetchSlots = useCallback(async (d) => {
-  if (!doctor || !d) return;
-  setLoadSlots(true);
-  setSelSlot(null);
-  try {
-    // Fetch availability slots
-    const { data } = await axios.get(
-      `${API_BASE}/doctors/${doctor._id}/availability?date=${d}`,
-      { headers: authHeaders() }
-    );
-    const rawSlots = data.availability || data || [];
-
-    // Fetch booked appointments for this doctor on this date
-    // to know EXACTLY which time slots are taken
-    let bookedTimes = [];
+  const fetchSlots = useCallback(async (d) => {
+    if (!doctor || !d) return;
+    setLoadSlots(true);
+    setSelSlot(null);
     try {
-      const apptRes = await axios.get(
-        `${API_BASE}/appointments/doctor/${doctor._id}?date=${d}`,
+      const { data } = await axios.get(
+        `${API_BASE}/doctors/${doctor._id}/availability?date=${d}`,
         { headers: authHeaders() }
       );
-      const appts = apptRes.data.appointments || [];
-      // Extract the time portion from each booked appointment's dateTime
-      bookedTimes = appts
-        .filter(a => ["confirmed", "pending"].includes(a.status))
-        .map(a => {
-          const dt = new Date(a.dateTime);
-          return `${dt.getHours().toString().padStart(2, "0")}:${dt.getMinutes().toString().padStart(2, "0")}`;
-        });
+      const rawSlots = data.availability || data || [];
+
+      let bookedTimes = [];
+      try {
+        const apptRes = await axios.get(
+          `${API_BASE}/appointments/doctor/${doctor._id}?date=${d}`,
+          { headers: authHeaders() }
+        );
+        const appts = apptRes.data.appointments || [];
+        bookedTimes = appts
+          .filter(a => ["confirmed", "pending"].includes(a.status))
+          .map(a => {
+            const dt = new Date(a.dateTime);
+            return `${dt.getHours().toString().padStart(2, "0")}:${dt.getMinutes().toString().padStart(2, "0")}`;
+          });
+      } catch {
+        // silently fall back
+      }
+
+      setSlots(rawSlots.map(slot => ({ ...slot, bookedTimes })));
     } catch {
-      // If this endpoint doesn't support date filter, fall back to bookedSlots count
-      console.log("Could not fetch booked times, using count fallback");
+      setSlots([]);
+    } finally {
+      setLoadSlots(false);
     }
-
-    // Attach bookedTimes to each slot
-    const enrichedSlots = rawSlots.map(slot => ({
-      ...slot,
-      bookedTimes, // attach actual booked times
-    }));
-
-    setSlots(enrichedSlots);
-  } catch {
-    setSlots([]);
-  } finally {
-    setLoadSlots(false);
-  }
-}, [doctor]);
+  }, [doctor]);
 
   const handleDateChange = (d) => { setDate(d); fetchSlots(d); };
 
   useEffect(() => {
     if (open) {
-      const defaultDate = window.plannedDate || "";
+      const defaultDate = (typeof window !== "undefined" && window.plannedDate) || "";
       setDate(defaultDate);
       if (defaultDate) fetchSlots(defaultDate);
       setSlots([]);
@@ -550,7 +549,7 @@ const fetchSlots = useCallback(async (d) => {
       <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-[scaleIn_.2s_ease-out]">
 
         <div className="flex items-center gap-4 px-6 py-5 bg-gradient-to-r from-blue-600 to-cyan-500 shrink-0">
-          <div className={`w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-white font-bold text-2xl shrink-0`}>
+          <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-white font-bold text-2xl shrink-0">
             {doctor.profilePicture
               ? <img src={doctor.profilePicture} alt={doctor.name} className="w-full h-full rounded-2xl object-cover" />
               : getInitials(doctor.name)
@@ -573,8 +572,6 @@ const fetchSlots = useCallback(async (d) => {
 
         <div className="flex-1 overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
-
-            {/* Left: doctor info */}
             <div className="p-6 space-y-5">
               {(doctor.qualifications || []).length > 0 && (
                 <div>
@@ -616,7 +613,6 @@ const fetchSlots = useCallback(async (d) => {
               )}
             </div>
 
-            {/* Right: availability + booking - UPDATED */}
             <div className="p-6 space-y-4">
               <p className="text-sm font-bold text-gray-900">Book an Appointment</p>
               <div>
@@ -626,154 +622,102 @@ const fetchSlots = useCallback(async (d) => {
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700
                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition" />
               </div>
-{date && (
-  <div>
-    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-      Available Slots
-    </p>
-    {loadSlots ? (
-      <div className="space-y-3">
-        {[1, 2].map((i) => (
-          <div key={i} className="border border-gray-100 rounded-xl p-3 animate-pulse">
-            <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
-            <div className="grid grid-cols-3 gap-2">
-              {[1, 2, 3].map((j) => (
-                <div key={j} className="h-10 bg-gray-100 rounded-xl" />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    ) : slots.length === 0 ? (
-      <div className="flex flex-col items-center py-8 text-center">
-        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-lg mb-2">📅</div>
-        <p className="text-xs text-gray-500 font-medium">No availability on this date</p>
-        <p className="text-xs text-gray-400">Try another date</p>
-      </div>
-    ) : (
-      <div className="space-y-4">
-        {slots.map((slot) => {
-          const timeSlots = generateTimeSlots(
-            slot.startTime,
-            slot.endTime,
-            slot.slotDuration || 30
-          );
 
-          // bookedTimes comes from the API — array of booked time strings
-          // e.g. ["09:00", "10:30"]
-          const bookedTimes = slot.bookedTimes || [];
+              {date && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Available Slots</p>
+                  {loadSlots ? (
+                    <div className="space-y-3">
+                      {[1, 2].map((i) => (
+                        <div key={i} className="border border-gray-100 rounded-xl p-3 animate-pulse">
+                          <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
+                          <div className="grid grid-cols-3 gap-2">
+                            {[1, 2, 3].map((j) => <div key={j} className="h-10 bg-gray-100 rounded-xl" />)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : slots.length === 0 ? (
+                    <div className="flex flex-col items-center py-8 text-center">
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-lg mb-2">📅</div>
+                      <p className="text-xs text-gray-500 font-medium">No availability on this date</p>
+                      <p className="text-xs text-gray-400">Try another date</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {slots.map((slot) => {
+                        const timeSlots = generateTimeSlots(slot.startTime, slot.endTime, slot.slotDuration || 30);
+                        const bookedTimes = slot.bookedTimes || [];
+                        const bookedCount = slot.bookedSlots || 0;
+                        const useCountFallback = bookedTimes.length === 0 && bookedCount > 0;
 
-          // fallback: if bookedTimes not available, use count-based
-          const bookedCount = slot.bookedSlots || 0;
-          const useCountFallback = bookedTimes.length === 0 && bookedCount > 0;
+                        return (
+                          <div key={slot._id} className="border border-gray-100 rounded-xl p-3">
+                            <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+                              <span className="text-xs font-semibold text-gray-700">
+                                {slot.startTime} – {slot.endTime} ({slot.slotDuration || 30} min)
+                              </span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                (slot.totalSlots || timeSlots.length) - bookedCount > 0
+                                  ? "bg-green-100 text-green-600"
+                                  : "bg-red-100 text-red-500"
+                              }`}>
+                                {Math.max(0, (slot.totalSlots || timeSlots.length) - bookedCount)}/{slot.totalSlots || timeSlots.length} available
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {timeSlots.map((time, idx) => {
+                                let isBooked;
+                                if (bookedTimes.length > 0) {
+                                  isBooked = bookedTimes.includes(time);
+                                } else if (useCountFallback) {
+                                  isBooked = idx < bookedCount;
+                                } else {
+                                  isBooked = false;
+                                }
+                                const isSelected = selSlot?.availabilityId === slot._id && selSlot?.startTime === time;
 
-          return (
-            <div
-              key={slot._id}
-              className="border border-gray-100 rounded-xl p-3 transition-all"
-            >
-              <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
-                <span className="text-xs font-semibold text-gray-700">
-                  {slot.startTime} – {slot.endTime} ({slot.slotDuration || 30} min)
-                </span>
-                <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full ${
-                    (slot.totalSlots || timeSlots.length) - bookedCount > 0
-                      ? "bg-green-100 text-green-600"
-                      : "bg-red-100 text-red-500"
-                  }`}
-                >
-                  {Math.max(0, (slot.totalSlots || timeSlots.length) - bookedCount)}/
-                  {slot.totalSlots || timeSlots.length} available
-                </span>
-              </div>
+                                return (
+                                  <button key={`${slot._id}-${time}`}
+                                    onClick={() => !isBooked && setSelSlot({ availabilityId: slot._id, startTime: time, slotDuration: slot.slotDuration, patientNumber: idx + 1 })}
+                                    disabled={isBooked}
+                                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all flex flex-col items-center
+                                      ${isBooked
+                                        ? "bg-red-50 text-red-300 border-red-100 cursor-not-allowed opacity-70"
+                                        : isSelected
+                                        ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
+                                        : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 cursor-pointer"
+                                      }`}>
+                                    <span className={isBooked ? "line-through" : ""}>{time}</span>
+                                    {isBooked
+                                      ? <span className="text-[8px] text-red-300">Booked</span>
+                                      : <span className={`text-[8px] ${isSelected ? "text-blue-100" : "text-gray-400"}`}>#{idx + 1}</span>
+                                    }
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
-              <div className="grid grid-cols-3 gap-2">
-                {timeSlots.map((time, idx) => {
-                  // Check if this specific time is booked
-                  let isBooked;
-                  if (bookedTimes.length > 0) {
-                    // Best case: API returns exact booked times
-                    isBooked = bookedTimes.includes(time);
-                  } else if (useCountFallback) {
-                    // Fallback: assume first N are booked
-                    isBooked = idx < bookedCount;
-                  } else {
-                    isBooked = false;
-                  }
-
-                  const isSelected =
-                    selSlot?.availabilityId === slot._id &&
-                    selSlot?.startTime === time;
-
-                  return (
-                    <button
-                      key={`${slot._id}-${time}`}
-                      onClick={() => {
-                        if (!isBooked) {
-                          setSelSlot({
-                            availabilityId: slot._id,
-                            startTime: time,
-                            slotDuration: slot.slotDuration,
-                            patientNumber: idx + 1,
-                          });
-                        }
-                      }}
-                      disabled={isBooked}
-                      className={`
-                        py-2 px-1 rounded-xl text-xs font-bold border transition-all
-                        flex flex-col items-center
-                        ${
-                          isBooked
-                            ? "bg-red-50 text-red-300 border-red-100 cursor-not-allowed opacity-70"
-                            : isSelected
-                            ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
-                            : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 cursor-pointer"
-                        }
-                      `}
-                    >
-                      <span className={isBooked ? "line-through" : ""}>{time}</span>
-                      {isBooked ? (
-                        <span className="text-[8px] text-red-300">Booked</span>
-                      ) : (
-                        <span
-                          className={`text-[8px] ${
-                            isSelected ? "text-blue-100" : "text-gray-400"
-                          }`}
-                        >
-                          #{idx + 1}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-  </div>
-)}
               {selSlot && date && (
                 <div className="pt-2 border-t border-gray-100">
                   <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-100 mb-3">
-                    <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
-                    </svg>
+                    <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
                     <p className="text-xs text-blue-700 font-medium">
                       Selected: {new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} at {selSlot.startTime}
                       {selSlot.patientNumber && ` (Patient #${selSlot.patientNumber})`}
                     </p>
                   </div>
-                  <button 
-                    onClick={() => onBook(doctor, selSlot, date)}
+                  <button onClick={() => onBook(doctor, selSlot, date)}
                     className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold
-                      shadow-md shadow-blue-200 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
+                      shadow-md shadow-blue-200 transition-colors flex items-center justify-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     Confirm Booking
                   </button>
                 </div>
@@ -864,20 +808,20 @@ function DoctorCard({ doctor, onView }) {
 export default function DoctorsPage() {
   const router = useRouter();
 
-  const [doctors, setDoctors] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [doctors,  setDoctors]  = useState([]);
+  const [loading,  setLoading]  = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const [nameQ, setNameQ] = useState("");
+  const [nameQ,      setNameQ]      = useState("");
   const [specialtyQ, setSpecialtyQ] = useState("All Specialties");
-  const [dateQ, setDateQ] = useState("");
+  const [dateQ,      setDateQ]      = useState("");
 
-  const [profileDoc, setProfileDoc] = useState(null);
+  const [profileDoc,  setProfileDoc]  = useState(null);
   const [bookingData, setBookingData] = useState(null);
   const [summaryData, setSummaryData] = useState(null);
   const [successData, setSuccessData] = useState(null);
-  const [booking, setBooking] = useState(false);
-  const [paying, setPaying] = useState(false);
+  const [booking,     setBooking]     = useState(false);
+  const [paying,      setPaying]      = useState(false);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -891,19 +835,17 @@ export default function DoctorsPage() {
   }, []);
   const removeToast = useCallback((id) => setToasts((p) => p.filter((t) => t.id !== id)), []);
 
+  // ── Search ──────────────────────────────────────────────────────────────────
   const handleSearch = useCallback(async () => {
     setLoading(true);
     setSearched(true);
     try {
       const params = {};
-      if (nameQ.trim()) params.name = nameQ.trim();
+      if (nameQ.trim())                    params.name      = nameQ.trim();
       if (specialtyQ !== "All Specialties") params.specialty = specialtyQ;
-      if (dateQ) params.date = dateQ;
+      if (dateQ)                            params.date      = dateQ;
 
-      const { data } = await axios.get(`${API_BASE}/doctors`, {
-        params,
-        headers: authHeaders(),
-      });
+      const { data } = await axios.get(`${API_BASE}/doctors`, { params, headers: authHeaders() });
       if (typeof window !== "undefined") window.plannedDate = dateQ;
       setDoctors(data.doctors || data || []);
     } catch (err) {
@@ -913,43 +855,48 @@ export default function DoctorsPage() {
     }
   }, [nameQ, specialtyQ, dateQ, addToast]);
 
-  useEffect(() => { handleSearch(); }, []);
+  useEffect(() => { handleSearch(); }, []); // eslint-disable-line
 
+  // ── Step 1: Reserve slot (creates DB hold + lock) ───────────────────────────
   const handleBookConfirm = async ({ reason, isForOthers, guestInfo }) => {
     const { doctor, slot, date } = bookingData;
     setBooking(true);
-    try {
-      const resp = await axios.post(`${API_BASE}/appointments/reserve`, {
-        doctorId: doctor._id,
-        doctorName: doctor.name,
-        specialty: doctor.specialty,
-        dateTime: `${date}T${slot.startTime}:00`,
-        reason,
-        consultationFee: doctor.consultationFee,
-        isForSomeoneElse: isForOthers,
-        bookedFor: {
-          name: guestInfo.name,
-          age: guestInfo.age,
-          email: guestInfo.email,
-        },
-        availabilityId: slot.availabilityId,
-        slotTime: slot.startTime,
-        patientNumber: slot.patientNumber,
-      }, { headers: authHeaders() });
 
-      const { reservationId, reservationData } = resp.data;
-      const hasFee = doctor.consultationFee > 0;
-      // This will fetch fresh slot data with updated bookedSlots
-    if (profileDoc) {
-      // Refresh the slots in the doctor profile modal
-      const currentDate = date;
-      const { data: freshSlots } = await axios.get(
-        `${API_BASE}/doctors/${doctor._id}/availability?date=${currentDate}`,
+    // ✅ Read logged-in user ONCE here so it's always correct
+    const currentUser = getCurrentUser();
+    const loggedInName  = currentUser.name  || "";
+    const loggedInEmail = currentUser.email || "";
+
+    try {
+      // The person paying/booking is always the logged-in user (patientName).
+      // bookedFor is who the appointment is FOR (may differ if booking for someone else).
+      const payload = {
+        doctorId:         doctor._id,
+        doctorName:       doctor.name,
+        specialty:        doctor.specialty,
+        consultationFee:  doctor.consultationFee,
+        dateTime:         `${date}T${slot.startTime}:00`,
+        reason,
+        // ✅ Always send logged-in user as patientName so DB saves correctly
+        patientName:      loggedInName,
+        patientEmail:     loggedInEmail,
+        isForSomeoneElse: isForOthers,
+        bookedFor: isForOthers
+          ? { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email }
+          : { name: loggedInName, age: "", email: loggedInEmail },
+        availabilityId:   slot.availabilityId,
+        slotTime:         slot.startTime,
+        patientNumber:    slot.patientNumber,
+      };
+
+      const resp = await axios.post(
+        `${API_BASE}/appointments/reserve`,
+        payload,
         { headers: authHeaders() }
       );
-      // Update the slots state in DoctorProfileModal
-      // You'll need to pass a refresh function or use state management
-    }
+
+      const { reservationId } = resp.data;
+      const hasFee = doctor.consultationFee > 0;
 
       setBookingData(null);
 
@@ -959,22 +906,25 @@ export default function DoctorsPage() {
           slot,
           date,
           reservationId,
-          reservationData,
           bookingInfo: {
             isForSomeoneElse: isForOthers,
-            bookedFor: { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email },
+            // ✅ Pass logged-in user so PaymentSummaryModal can show correct name
+            loggedInUser: { name: loggedInName, email: loggedInEmail },
+            bookedFor: isForOthers
+              ? { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email }
+              : null,
           },
         });
         addToast("Slot reserved! Please complete payment within 10 minutes.", "info");
       } else {
-        const createResp = await axios.post(`${API_BASE}/appointments/create-from-reservation`, {
-          reservationId,
-          paymentId: "free_appointment",
-        }, { headers: authHeaders() });
-        
+        // Free appointment — create immediately
+        await axios.post(
+          `${API_BASE}/appointments/create-from-reservation`,
+          { reservationId, paymentId: "free_appointment" },
+          { headers: authHeaders() }
+        );
         setSuccessData({ doctor, slot, date });
         addToast("Appointment booked successfully!", "success");
-        setTimeout(() => router.push("/dashboard/appointments"), 3000);
       }
     } catch (err) {
       console.error("Booking error:", err);
@@ -984,20 +934,27 @@ export default function DoctorsPage() {
     }
   };
 
+  // ── Step 2: Initiate PayHere payment ───────────────────────────────────────
   const handleProceedToPayment = async () => {
     if (!summaryData) return;
     setPaying(true);
     try {
       const { doctor, reservationId, bookingInfo } = summaryData;
 
+      // ✅ Determine correct patient name/email for PayHere form
+      // PayHere shows these on the payment page — use the person who is actually paying
+      // (the logged-in user), NOT the guest (bookedFor)
+      const payerName  = bookingInfo.loggedInUser?.name  || "";
+      const payerEmail = bookingInfo.loggedInUser?.email || "";
+
       const { data } = await axios.post(
         `${API_BASE}/payments/initiate`,
         {
-          appointmentId: reservationId,
-          amount: doctor.consultationFee,
-          patientName: bookingInfo.isForSomeoneElse ? bookingInfo.bookedFor?.name : undefined,
-          patientEmail: bookingInfo.isForSomeoneElse ? bookingInfo.bookedFor?.email : undefined,
-          reservationId,
+          appointmentId: reservationId,   // backend uses this as the key
+          reservationId,                  // also send explicitly for metadata
+          amount:        doctor.consultationFee,
+          patientName:   payerName,       // payer = logged-in user
+          patientEmail:  payerEmail,
         },
         { headers: authHeaders() }
       );
@@ -1008,6 +965,7 @@ export default function DoctorsPage() {
           localStorage.setItem("lastReservationId", reservationId);
         }
 
+        // Build and submit hidden form to PayHere
         const form = document.createElement("form");
         form.method = "POST";
         form.action = data.checkoutUrl;
@@ -1016,15 +974,16 @@ export default function DoctorsPage() {
         Object.keys(data.paymentData).forEach((key) => {
           if (data.paymentData[key] !== null && data.paymentData[key] !== undefined) {
             const input = document.createElement("input");
-            input.type = "hidden";
-            input.name = key;
+            input.type  = "hidden";
+            input.name  = key;
             input.value = data.paymentData[key];
             form.appendChild(input);
           }
         });
 
         document.body.appendChild(form);
-        form.submit();
+        console.log("🚀 Submitting to PayHere:", data.checkoutUrl);
+        form.submit(); // browser navigates away
       } else {
         throw new Error("Invalid payment response from server");
       }
@@ -1033,6 +992,7 @@ export default function DoctorsPage() {
       addToast(err.response?.data?.message || "Payment failed. Please try again.", "error");
       setPaying(false);
     }
+    // ✅ Do NOT call setPaying(false) on success — browser is navigating away
   };
 
   const handleOpenBook = (doctor, slot, date) => {
@@ -1040,6 +1000,7 @@ export default function DoctorsPage() {
     setBookingData({ doctor, slot, date });
   };
 
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
       {mounted && (
@@ -1048,7 +1009,7 @@ export default function DoctorsPage() {
           <DoctorProfileModal open={!!profileDoc} doctor={profileDoc} onClose={() => setProfileDoc(null)} onBook={handleOpenBook} />
           <BookingModal open={!!bookingData} doctor={bookingData?.doctor} slot={bookingData?.slot} date={bookingData?.date} onClose={() => setBookingData(null)} onConfirm={handleBookConfirm} booking={booking} />
           <PaymentSummaryModal open={!!summaryData} summaryData={summaryData} onClose={() => setSummaryData(null)} onPay={handleProceedToPayment} paying={paying} />
-          <BookingSuccess open={!!successData} doctor={successData?.doctor} date={successData?.date} slot={successData?.slot} onClose={() => setSuccessData(null)} onDashboard={() => router.push("/dashboard")} />
+          <BookingSuccess open={!!successData} doctor={successData?.doctor} date={successData?.date} slot={successData?.slot} onClose={() => setSuccessData(null)} onDashboard={() => router.push("/dashboard/appointments")} />
         </>
       )}
 
