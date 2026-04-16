@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import axios from "axios";
+import api from "@/services/api";
 import { useAuth } from "@/context/AuthContext";
 import toast, { Toaster } from "react-hot-toast";
 
@@ -92,11 +92,7 @@ export default function ReportsPage() {
 
   const fetchReports = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/patients/reports`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await api.get("/patients/reports");
       setReports(res.data.reports || []);
     } catch (err) {
       console.error("Failed to load reports", err);
@@ -157,13 +153,11 @@ export default function ReportsPage() {
     formData.append("document", file);
 
     try {
-      const token = localStorage.getItem("token");
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/patients/reports`,
+      await api.post(
+        "/patients/reports",
         formData,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "multipart/form-data",
           },
           onUploadProgress: (e) => {
@@ -194,10 +188,7 @@ export default function ReportsPage() {
     if (!confirm("Are you sure you want to permanently delete this report?")) return;
     setDeletingId(id);
     try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/patients/reports/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.delete(`/patients/reports/${id}`);
       toast.success("Report deleted successfully.");
       setReports((prev) => prev.filter((r) => r._id !== id));
     } catch (err) {
