@@ -120,6 +120,7 @@ function AppointmentCard({ appt, onClick }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
+  const router = useRouter();
   const [cancelStep, setCancelStep] = useState("view"); // "view" | "confirm"
   const [reason, setReason] = useState("");
 
@@ -138,11 +139,6 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const docName = appt.doctorName || "Doctor";
   const dt = appt.dateTime || appt.date;
 
-  const handleJoinMeeting = () => {
-    if (appt.meetingLink) {
-      window.open(appt.meetingLink, "_blank");
-    }
-  };
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
@@ -211,9 +207,9 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
           <div className="space-y-3 pt-2">
             {cancelStep === "view" ? (
               <>
-                {status === "confirmed" && (appt.meetingLink || appt.meetingUrl) && (
+                {status === "confirmed" && (
                   <button 
-                    onClick={handleJoinMeeting}
+                    onClick={() => router.push(`/dashboard/consultation/${appt._id}`)}
                     className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 overflow-hidden group"
                   >
                     <span className="relative z-10">Join Video Consultation</span>

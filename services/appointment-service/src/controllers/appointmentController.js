@@ -10,8 +10,8 @@ const { publishNotificationEvent } = require("../utils/rabbitmq");
  * In production this would integrate with a Jitsi / Daily.co / Zoom API.
  */
 const generateMeetingLink = (appointmentId) => {
-  const room = `healthcare-${appointmentId}-${Math.random().toString(36).slice(2, 9)}`;
-  return `https://meet.jit.si/${room}`;
+  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  return `${baseUrl}/dashboard/consultation/${appointmentId}`;
 };
 
 /**
@@ -112,11 +112,11 @@ const bookAppointment = async (req, res) => {
       consultationFee: consultationFee || 0,
       status: "confirmed", // Auto-confirm
       paymentStatus: "paid", // Auto-mark as paid
-      meetingLink: generateMeetingLink(`${patientId}-${Date.now()}`),
       isForSomeoneElse: !!isForSomeoneElse,
       bookedFor: bookedFor || { name: "", age: null, phone: "", email: "" },
       patientNumber,
     });
+    appointment.meetingLink = generateMeetingLink(appointment._id.toString());
 
     await appointment.save();
 
