@@ -16,7 +16,7 @@ const authenticate = async (req, res, next) => {
 
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || "your-secret-key",
+      process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this",
     );
 
     // Bypass DB check for service-to-service calls (e.g., Doctor fetching patient details)

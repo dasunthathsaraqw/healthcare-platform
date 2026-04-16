@@ -16,7 +16,9 @@ const authenticate = (req, res, next) => {
     }
 
     const token = authHeader.split(" ")[1];
-    const secret = process.env.JWT_SECRET || "123";
+    // Must match patient-service token signing (authController) and other services.
+    const secret =
+      process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this";
     const internalSecret = process.env.INTERNAL_SECRET;
 
     // Service-to-service calls (e.g. appointment-service calling payment-service)
