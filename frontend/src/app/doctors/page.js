@@ -9,6 +9,7 @@ const API_BASE = process.env.NEXT_PUBLIC_DOCTOR_API_URL || "http://localhost:808
 const API_BASE_APPOINTMENT = process.env.NEXT_PUBLIC_APPOINTMENT_API_URL || "http://localhost:8080/api";
 const API_BASE_PAYMENT = process.env.NEXT_PUBLIC_PAYMENT_API_URL || "http://localhost:8080/api";
 
+
 function authHeaders() {
   const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
   return t ? { Authorization: `Bearer ${t}` } : {};
@@ -500,7 +501,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
       let bookedTimes = [];
       try {
         const apptRes = await axios.get(
-          `${API_BASE}/appointments/doctor/${doctor._id}?date=${d}`,
+          `${API_BASE_APPOINTMENT}/appointments/doctor/${doctor._id}?date=${d}`,
           { headers: authHeaders() }
         );
         const appts = apptRes.data.appointments || [];
@@ -918,7 +919,7 @@ export default function DoctorsPage() {
     const { doctor, slot, date } = bookingData;
     setBooking(true);
     try {
-      const resp = await axios.post(`${API_BASE}/appointments/reserve`, {
+      const resp = await axios.post(`${API_BASE_APPOINTMENT}/appointments/reserve`, {
         doctorId: doctor._id,
         doctorName: doctor.name,
         specialty: doctor.specialty,
@@ -966,7 +967,7 @@ export default function DoctorsPage() {
         });
         addToast("Slot reserved! Please complete payment within 10 minutes.", "info");
       } else {
-        const createResp = await axios.post(`${API_BASE}/appointments/create-from-reservation`, {
+        const createResp = await axios.post(`${API_BASE_APPOINTMENT}/appointments/create-from-reservation`, {
           reservationId,
           paymentId: "free_appointment",
         }, { headers: authHeaders() });
@@ -990,7 +991,7 @@ export default function DoctorsPage() {
       const { doctor, reservationId, bookingInfo } = summaryData;
 
       const { data } = await axios.post(
-        `${API_BASE}/payments/initiate`,
+        `${API_BASE_PAYMENT}/payments/initiate`,
         {
           appointmentId: reservationId,
           amount: doctor.consultationFee,
