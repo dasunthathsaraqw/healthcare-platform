@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import axios from "axios";
 
-const API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
+const API_BASE = (process.env.NEXT_PUBLIC_APPOINTMENT_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
 
 function authHeaders() {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -16,19 +16,19 @@ function authHeaders() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "pending",   label: "Pending",  badge: true  },
-  { id: "today",     label: "Today",    badge: false },
-  { id: "upcoming",  label: "Upcoming", badge: false },
-  { id: "past",      label: "Past",     badge: false },
-  { id: "all",       label: "All",      badge: false },
+  { id: "pending", label: "Pending", badge: true },
+  { id: "today", label: "Today", badge: false },
+  { id: "upcoming", label: "Upcoming", badge: false },
+  { id: "past", label: "Past", badge: false },
+  { id: "all", label: "All", badge: false },
 ];
 
 const STATUS_CONFIG = {
-  pending:   { label: "Pending",   bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200",  dot: "bg-amber-400"  },
-  confirmed: { label: "Confirmed", bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200",   dot: "bg-blue-500"   },
-  completed: { label: "Completed", bg: "bg-green-50",  text: "text-green-700",  border: "border-green-200",  dot: "bg-green-500"  },
-  cancelled: { label: "Cancelled", bg: "bg-gray-100",  text: "text-gray-500",   border: "border-gray-200",   dot: "bg-gray-400"   },
-  rejected:  { label: "Rejected",  bg: "bg-red-50",    text: "text-red-600",    border: "border-red-200",    dot: "bg-red-500"    },
+  pending: { label: "Pending", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-400" },
+  confirmed: { label: "Confirmed", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500" },
+  completed: { label: "Completed", bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500" },
+  cancelled: { label: "Cancelled", bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200", dot: "bg-gray-400" },
+  rejected: { label: "Rejected", bg: "bg-red-50", text: "text-red-600", border: "border-red-200", dot: "bg-red-500" },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ function calcAge(dob) {
 function isWithinWindow(rawDate, windowMins = 15) {
   if (!rawDate) return false;
   const appt = new Date(rawDate).getTime();
-  const now  = Date.now();
+  const now = Date.now();
   const diff = (appt - now) / 60000; // minutes
   return diff >= -windowMins && diff <= windowMins;
 }
@@ -81,11 +81,11 @@ function ToastContainer({ toasts, removeToast }) {
           className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-sm font-medium
             animate-[slideUp_0.2s_ease-out]
             ${t.type === "success" ? "bg-green-600 text-white"
-              : t.type === "error"   ? "bg-red-600 text-white"
-              : "bg-gray-900 text-white"}`}
+              : t.type === "error" ? "bg-red-600 text-white"
+                : "bg-gray-900 text-white"}`}
         >
           {t.type === "success" && <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
-          {t.type === "error"   && <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>}
+          {t.type === "error" && <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>}
           <span>{t.message}</span>
           <button onClick={() => removeToast(t.id)} className="ml-1 opacity-70 hover:opacity-100">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -103,8 +103,8 @@ function ToastContainer({ toasts, removeToast }) {
 
 function RejectModal({ open, onClose, onConfirm, loading }) {
   const [reason, setReason] = useState("");
-  const [err, setErr]       = useState("");
-  const textRef             = useRef(null);
+  const [err, setErr] = useState("");
+  const textRef = useRef(null);
 
   useEffect(() => {
     if (open) { setReason(""); setErr(""); setTimeout(() => textRef.current?.focus(), 60); }
@@ -133,7 +133,7 @@ function RejectModal({ open, onClose, onConfirm, loading }) {
             <p className="text-xs text-gray-500">Please give a reason for the patient</p>
           </div>
           <button onClick={onClose} className="ml-auto p-1.5 rounded-lg hover:bg-red-100 text-gray-400 hover:text-gray-600">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
         {/* Body */}
@@ -162,7 +162,7 @@ function RejectModal({ open, onClose, onConfirm, loading }) {
             <button type="submit" disabled={loading}
               className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold
                 disabled:opacity-60 flex items-center justify-center gap-2 shadow-md shadow-red-200 transition-colors">
-              {loading ? (<><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Rejecting…</>) : "Reject Appointment"}
+              {loading ? (<><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Rejecting…</>) : "Reject Appointment"}
             </button>
           </div>
         </form>
@@ -177,10 +177,10 @@ function RejectModal({ open, onClose, onConfirm, loading }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function PatientModal({ open, onClose, patientId }) {
-  const [data, setData]         = useState(null);
-  const [loading, setLoading]   = useState(false);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [innerTab, setInnerTab] = useState("info");
-  const [error, setError]       = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open || !patientId) return;
@@ -196,12 +196,12 @@ function PatientModal({ open, onClose, patientId }) {
 
   if (!open || typeof window === "undefined") return null;
 
-  const patient      = data?.patient || {};
+  const patient = data?.patient || {};
   const prescriptions = data?.prescriptions || [];
-  const age          = calcAge(patient.dob || patient.dateOfBirth);
+  const age = calcAge(patient.dob || patient.dateOfBirth);
 
   const INNER_TABS = [
-    { id: "info",    label: "Basic Info" },
+    { id: "info", label: "Basic Info" },
     { id: "history", label: "Medical History" },
     { id: "scripts", label: `Prescriptions (${prescriptions.length})` },
     { id: "reports", label: "Reports" },
@@ -222,7 +222,7 @@ function PatientModal({ open, onClose, patientId }) {
             <p className="text-xs text-gray-500">{patient.email || ""}</p>
           </div>
           <button onClick={onClose} className="ml-auto p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 shrink-0">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
@@ -243,7 +243,7 @@ function PatientModal({ open, onClose, patientId }) {
         <div className="overflow-y-auto flex-1 p-6">
           {loading && (
             <div className="space-y-3 animate-pulse">
-              {[1,2,3,4].map((i) => <div key={i} className="h-8 bg-gray-100 rounded-xl" />)}
+              {[1, 2, 3, 4].map((i) => <div key={i} className="h-8 bg-gray-100 rounded-xl" />)}
             </div>
           )}
           {error && (
@@ -258,13 +258,13 @@ function PatientModal({ open, onClose, patientId }) {
               {innerTab === "info" && (
                 <div className="space-y-3">
                   {[
-                    { label: "Full Name",   value: patient.name },
-                    { label: "Email",       value: patient.email },
-                    { label: "Phone",       value: patient.phone },
-                    { label: "Age",         value: age ? `${age} years` : null },
-                    { label: "Gender",      value: patient.gender },
+                    { label: "Full Name", value: patient.name },
+                    { label: "Email", value: patient.email },
+                    { label: "Phone", value: patient.phone },
+                    { label: "Age", value: age ? `${age} years` : null },
+                    { label: "Gender", value: patient.gender },
                     { label: "Blood Group", value: patient.bloodGroup || patient.bloodType },
-                    { label: "Address",     value: patient.address },
+                    { label: "Address", value: patient.address },
                     { label: "Emergency Contact", value: patient.emergencyContact },
                   ].map(({ label, value }) => value ? (
                     <div key={label} className="flex gap-3 py-2.5 border-b border-gray-100 last:border-0">
@@ -318,12 +318,12 @@ function PatientModal({ open, onClose, patientId }) {
                         <div>
                           <p className="text-sm font-semibold text-gray-900">{rx.diagnosis}</p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            {rx.issuedAt ? new Date(rx.issuedAt).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" }) : ""}
+                            {rx.issuedAt ? new Date(rx.issuedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
                           </p>
                         </div>
                         {rx.followUpDate && (
                           <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">
-                            Follow-up: {new Date(rx.followUpDate).toLocaleDateString("en-US", { month:"short", day:"numeric" })}
+                            Follow-up: {new Date(rx.followUpDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                           </span>
                         )}
                       </div>
@@ -362,7 +362,7 @@ function PatientModal({ open, onClose, patientId }) {
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
                               <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                               </svg>
                             </div>
                             <div>
@@ -408,12 +408,12 @@ function EmptyState({ icon = "📅", title = "No appointments found", subtitle =
 // APPOINTMENT CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoading }) {
+function AppointmentCard({ appt, onAccept, onReject, onDelete, onViewDetails, actionLoading }) {
   const status = appt.status || "pending";
-  const sc     = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  const sc = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   const { date, time } = formatDateTime(appt.dateTime || appt.date);
   const patientName = appt.patientName || appt.patientId?.name || "Unknown Patient";
-  const inWindow    = isWithinWindow(appt.dateTime || appt.date);
+  const inWindow = isWithinWindow(appt.dateTime || appt.date);
   const isActioning = actionLoading === appt._id;
 
   return (
@@ -461,13 +461,13 @@ function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoadin
         <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100">
           <div className="flex items-center gap-1.5 text-xs text-gray-600">
             <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             <span className="font-medium">{date}</span>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-600">
             <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="font-medium">{time}</span>
           </div>
@@ -477,7 +477,7 @@ function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoadin
         {(appt.reason || appt.notes) && (
           <div className="mt-2.5 flex items-start gap-1.5">
             <svg className="w-3.5 h-3.5 text-gray-300 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
             </svg>
             <p className="text-xs text-gray-500 line-clamp-2">{appt.reason || appt.notes}</p>
           </div>
@@ -500,15 +500,15 @@ function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoadin
                 className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold
                   disabled:opacity-50 transition-colors shadow-sm shadow-blue-200 flex items-center gap-1.5">
                 {isActioning
-                  ? <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+                  ? <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                  : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                 }
                 Accept
               </button>
               <button onClick={() => onReject(appt)} disabled={isActioning}
                 className="px-4 py-2 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-xs font-bold
                   disabled:opacity-50 transition-colors flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 Reject
               </button>
             </>
@@ -519,8 +519,8 @@ function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoadin
             <button className="px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white text-xs font-bold
               transition-colors shadow-sm shadow-green-200 flex items-center gap-1.5 animate-pulse">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Start Consultation
             </button>
@@ -531,9 +531,20 @@ function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoadin
             <button className="px-4 py-2 rounded-xl border border-green-200 text-green-600 hover:bg-green-50
               text-xs font-bold transition-colors flex items-center gap-1.5">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               View Prescription
+            </button>
+          )}
+
+          {/* Delete (if past, completed, rejected, cancelled etc) */}
+          {(status === "completed" || status === "cancelled" || status === "rejected") && (
+            <button
+              onClick={() => onDelete(appt._id)} disabled={isActioning}
+              className="px-4 py-2 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-xs font-bold transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              Delete
             </button>
           )}
 
@@ -544,8 +555,8 @@ function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoadin
               hover:border-blue-200 hover:text-blue-600 text-xs font-bold transition-colors flex items-center gap-1.5"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
             View Details
           </button>
@@ -589,23 +600,23 @@ function SkeletonCard() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function AppointmentsPage() {
-  const [activeTab, setActiveTab]       = useState("pending");
+  const [activeTab, setActiveTab] = useState("pending");
   const [appointments, setAppointments] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
-  const [loading, setLoading]           = useState(false);
-  const [refreshing, setRefreshing]     = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Modals
-  const [rejectTarget, setRejectTarget]   = useState(null); // appointment object
+  const [rejectTarget, setRejectTarget] = useState(null); // appointment object
   const [rejectLoading, setRejectLoading] = useState(false);
-  const [patientId, setPatientId]         = useState(null);
+  const [patientId, setPatientId] = useState(null);
 
   // Action loading
   const [actionLoading, setActionLoading] = useState(null);
 
   // Toasts
   const toastRef = useRef(0);
-  const [toasts, setToasts]              = useState([]);
+  const [toasts, setToasts] = useState([]);
 
   const addToast = useCallback((message, type = "info") => {
     const id = ++toastRef.current;
@@ -617,11 +628,11 @@ export default function AppointmentsPage() {
   // ── Build query params per tab ─────────────────────────────────────────────
   const buildParams = useCallback((tab) => {
     switch (tab) {
-      case "pending":  return { status: "pending" };
-      case "today":    return { date: todayISO() };
+      case "pending": return { status: "pending" };
+      case "today": return { date: todayISO() };
       case "upcoming": return { status: "upcoming" };
-      case "past":     return { status: "past" };
-      default:         return {};
+      case "past": return { status: "past" };
+      default: return {};
     }
   }, []);
 
@@ -629,7 +640,7 @@ export default function AppointmentsPage() {
   const fetchAppointments = useCallback(async (tab, silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
     try {
-      const { data } = await axios.get(`${API_BASE}/doctors/appointments`, {
+      const { data } = await axios.get(`${API_BASE}/appointments/manage`, {
         headers: authHeaders(),
         params: buildParams(tab),
       });
@@ -647,12 +658,12 @@ export default function AppointmentsPage() {
   // Fetch also pending count whenever tab changes (for badge)
   const fetchPendingCount = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API_BASE}/doctors/appointments`, {
+      const { data } = await axios.get(`${API_BASE}/appointments/manage`, {
         headers: authHeaders(),
         params: { status: "pending" },
       });
       setPendingCount((data.appointments || data || []).length);
-    } catch (_) {}
+    } catch (_) { }
   }, []);
 
   // Initial load + tab change
@@ -674,7 +685,7 @@ export default function AppointmentsPage() {
   const handleAccept = async (id) => {
     setActionLoading(id);
     try {
-      await axios.put(`${API_BASE}/doctors/appointments/${id}/accept`, {}, { headers: authHeaders() });
+      await axios.put(`${API_BASE}/appointments/manage/${id}/status`, { status: "confirmed" }, { headers: authHeaders() });
       addToast("Appointment accepted!", "success");
       setAppointments((p) => p.filter((a) => a._id !== id));
       setPendingCount((n) => Math.max(0, n - 1));
@@ -690,8 +701,8 @@ export default function AppointmentsPage() {
     if (!rejectTarget) return;
     setRejectLoading(true);
     try {
-      await axios.put(`${API_BASE}/doctors/appointments/${rejectTarget._id}/reject`,
-        { reason },
+      await axios.put(`${API_BASE}/appointments/manage/${rejectTarget._id}/status`,
+        { status: "rejected", reason },
         { headers: authHeaders() }
       );
       addToast("Appointment rejected.", "success");
@@ -702,6 +713,21 @@ export default function AppointmentsPage() {
       addToast(err.response?.data?.message || "Failed to reject", "error");
     } finally {
       setRejectLoading(false);
+    }
+  };
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this appointment?")) return;
+    setActionLoading(id);
+    try {
+      await axios.delete(`${API_BASE}/appointments/manage/${id}`, { headers: authHeaders() });
+      addToast("Appointment deleted.", "success");
+      setAppointments((p) => p.filter((a) => a._id !== id));
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to delete", "error");
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -737,7 +763,7 @@ export default function AppointmentsPage() {
               transition-all disabled:opacity-50"
           >
             <svg className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
@@ -747,7 +773,7 @@ export default function AppointmentsPage() {
         {activeTab === "pending" && (
           <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
             <svg className="w-3.5 h-3.5 animate-pulse shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/>
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
             </svg>
             Auto-refreshing every 30 seconds
           </div>
@@ -804,6 +830,7 @@ export default function AppointmentsPage() {
                     appt={appt}
                     onAccept={handleAccept}
                     onReject={setRejectTarget}
+                    onDelete={handleDelete}
                     onViewDetails={(pid) => pid && setPatientId(pid)}
                     actionLoading={actionLoading}
                   />
