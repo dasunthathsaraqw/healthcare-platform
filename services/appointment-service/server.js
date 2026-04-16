@@ -60,8 +60,8 @@ app.get("/health", (req, res) => {
 });
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
-app.use("/api/appointments", require("./src/routes/appointmentRouter-auth"));
 app.use("/api/appointments/manage", require("./src/routes/doctorAppointmentRouter"));
+app.use("/api/appointments", require("./src/routes/appointmentRouter-auth"));
 
 // ── Global Error Handler ───────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
