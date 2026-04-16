@@ -3,7 +3,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import axios from "axios";
 
-const API_BASE = "http://localhost:8080/api";
+const API_BASE = process.env.NEXT_PUBLIC_PAYMENT_API_URL || "http://localhost:8080/api";
 
 function authHeaders() {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 
 const API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
+const APPOINTMENT_API_BASE = (process.env.NEXT_PUBLIC_APPOINTMENT_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function authHeaders() {
@@ -168,7 +169,7 @@ export default function DoctorDashboardPage() {
   // Fetch pending appointments
   const fetchPending = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API_BASE}/doctors/appointments?status=pending`, {
+      const { data } = await axios.get(`${APPOINTMENT_API_BASE}/appointments/manage?status=pending`, {
         headers: authHeaders(),
       });
       setPendingAppts(data.appointments || data || []);
@@ -183,7 +184,7 @@ export default function DoctorDashboardPage() {
   const fetchToday = useCallback(async () => {
     try {
       const { data } = await axios.get(
-        `${API_BASE}/doctors/appointments?date=${todayISO()}`,
+        `${APPOINTMENT_API_BASE}/appointments/manage?date=${todayISO()}`,
         { headers: authHeaders() }
       );
       setTodayAppts(data.appointments || data || []);
@@ -206,8 +207,8 @@ export default function DoctorDashboardPage() {
     setError("");
     try {
       await axios.put(
-        `${API_BASE}/doctors/appointments/${id}/accept`,
-        {},
+        `${APPOINTMENT_API_BASE}/appointments/manage/${id}/status`,
+        { status: "confirmed" },
         { headers: authHeaders() }
       );
       // Optimistic update
@@ -226,8 +227,8 @@ export default function DoctorDashboardPage() {
     setError("");
     try {
       await axios.put(
-        `${API_BASE}/doctors/appointments/${id}/reject`,
-        { reason: "Declined by doctor" },
+        `${APPOINTMENT_API_BASE}/appointments/manage/${id}/status`,
+        { status: "rejected", reason: "Declined by doctor" },
         { headers: authHeaders() }
       );
       setPendingAppts((prev) => prev.filter((a) => a._id !== id));
