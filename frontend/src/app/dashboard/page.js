@@ -29,12 +29,13 @@ function getInitials(name = "") {
   return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "DR";
 }
 
-// ✅ Only confirmed/completed statuses (paid appointments)
+// Updated status styles with cancellation_requested
 const STATUS_STYLES = {
   confirmed: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500", label: "Confirmed" },
   completed: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500", label: "Completed" },
   cancelled: { bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200", dot: "bg-gray-400", label: "Cancelled" },
   rejected: { bg: "bg-red-50", text: "text-red-600", border: "border-red-200", dot: "bg-red-400", label: "Rejected" },
+  cancellation_requested: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500", label: "Cancellation Requested" },
 };
 
 function AppointmentCard({ appt, onClick }) {
@@ -64,6 +65,14 @@ function AppointmentCard({ appt, onClick }) {
         {appt.patientNumber && (
           <p className="text-[10px] text-gray-400 mt-1">Patient #{appt.patientNumber}</p>
         )}
+        {/* Show refund pending badge */}
+        {appt.refundAmount > 0 && appt.status === "cancellation_requested" && (
+          <div className="mt-2 px-2 py-1 bg-amber-50 border border-amber-100 rounded-lg inline-block">
+            <p className="text-[9px] text-amber-600">
+              Refund requested: Rs. {appt.refundAmount}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -80,12 +89,12 @@ function AppointmentCard({ appt, onClick }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// APPOINTMENT DETAIL MODAL
+// APPOINTMENT DETAIL MODAL (with refund info)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const router = useRouter();
-  const [cancelStep, setCancelStep] = useState("view"); // "view" | "confirm"
+  const [cancelStep, setCancelStep] = useState("view");
   const [reason, setReason] = useState("");
 
   useEffect(() => {
@@ -101,7 +110,6 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const sc = STATUS_STYLES[status] || STATUS_STYLES.confirmed;
   const docName = appt.doctorName || "Doctor";
   const dt = appt.dateTime || appt.date;
-
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
@@ -144,6 +152,11 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                 <span className={`w-2 h-2 rounded-full ${sc.dot}`} />
                 {sc.label}
               </span>
+              {appt.refundAmount > 0 && appt.status === "cancellation_requested" && (
+                <p className="text-[10px] text-amber-600 font-semibold mt-1">
+                  Refund: Rs. {appt.refundAmount} pending admin approval
+                </p>
+              )}
             </div>
           </div>
 
@@ -191,18 +204,10 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
           <div className="space-y-3 pt-2">
             {cancelStep === "view" ? (
               <>
-<<<<<<< HEAD
-                {/* Join Meeting for confirmed appointments */}
-                {status === "confirmed" && appt.meetingLink && (
-                  <button
-                    onClick={handleJoinMeeting}
-                    className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3"
-=======
                 {status === "confirmed" && (
-                  <button 
+                  <button
                     onClick={() => router.push(`/dashboard/consultation/${appt._id}`)}
                     className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 overflow-hidden group"
->>>>>>> c575229fd264984ad7eb080824792207e08e788a
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -233,6 +238,39 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
               </>
             ) : (
               <div className="space-y-4 animate-[slideUp_0.2s_ease-out]">
+                {/* Refund Information Display */}
+                <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                  <p className="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Refund Policy
+                  </p>
+                  <div className="space-y-1 text-xs text-amber-600">
+                    <p className="flex justify-between">
+                      <span>✓ 24+ hours before:</span>
+                      <span className="font-semibold">100% refund</span>
+                    </p>
+                    <p className="flex justify-between">
+                      <span>✓ 12-24 hours before:</span>
+                      <span className="font-semibold">50% refund</span>
+                    </p>
+                    <p className="flex justify-between">
+                      <span>✓ 6-12 hours before:</span>
+                      <span className="font-semibold">25% refund</span>
+                    </p>
+                    <p className="flex justify-between">
+                      <span>✗ Less than 6 hours:</span>
+                      <span className="font-semibold">No refund</span>
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-amber-200">
+                    <p className="text-[10px] text-amber-500">
+                      Refunds require admin approval and will be processed within 3-5 business days
+                    </p>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
                     Please provide a reason for cancellation
@@ -245,6 +283,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                     className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-200 transition-all resize-none h-24"
                   />
                 </div>
+
                 <div className="flex gap-3">
                   <button
                     onClick={() => setCancelStep("view")}
@@ -262,7 +301,14 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                       </svg>
-                    ) : "Confirm Cancellation"}
+                    ) : (
+                      <>
+                        Request Cancellation
+                        {appt.consultationFee > 0 && (
+                          <span className="text-[10px] opacity-80">(Refund eligibility checked)</span>
+                        )}
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -316,7 +362,7 @@ function StatCard({ label, value, icon, color, loading }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN DASHBOARD PAGE - Only shows PAID/Confirmed appointments
+// MAIN DASHBOARD PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PatientDashboard() {
@@ -339,12 +385,11 @@ export default function PatientDashboard() {
     } catch (_) { router.replace("/login"); }
   }, [router]);
 
-  // Fetch ONLY confirmed/completed appointments (paid appointments)
+  // Fetch appointments (including cancellation_requested)
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      // Fetch both upcoming and past, then filter for confirmed/completed only
       const [upRes, pastRes] = await Promise.allSettled([
         axios.get(`${API_BASE}/appointments/patient/upcoming`, { headers: authHeaders() }),
         axios.get(`${API_BASE}/appointments/patient/past`, { headers: authHeaders() }),
@@ -360,14 +405,13 @@ export default function PatientDashboard() {
         all = [...all, ...pastData];
       }
 
-      // ✅ FILTER: Only show confirmed or completed appointments (paid)
-      const paidAppointments = all.filter(a =>
-        a.status === "confirmed" || a.status === "completed"
+      // Filter: Show confirmed, completed, or cancellation_requested
+      const validAppointments = all.filter(a =>
+        a.status === "confirmed" || a.status === "completed" || a.status === "cancellation_requested"
       );
 
-      // Sort by date (newest first)
-      paidAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
-      setAppointments(paidAppointments);
+      validAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+      setAppointments(validAppointments);
     } catch (err) {
       console.error("Fetch error:", err);
       setError("Unable to load appointments. Please refresh.");
@@ -380,15 +424,25 @@ export default function PatientDashboard() {
     fetchAppointments();
   }, [fetchAppointments]);
 
-  // Cancel appointment
+  // Cancel appointment with refund calculation
   const handleCancel = async (id, reason) => {
     setCancelling(id);
     try {
-      await axios.put(`${API_BASE}/appointments/${id}/cancel`, { reason }, { headers: authHeaders() });
-      await fetchAppointments(); // Refresh list
+      const response = await axios.put(`${API_BASE}/appointments/${id}/cancel`, { reason }, { headers: authHeaders() });
+
+      // Show appropriate message based on refund eligibility
+      if (response.data.refundAmount > 0) {
+        alert(`Cancellation request submitted!\n\nRefund Amount: Rs. ${response.data.refundAmount} (${response.data.refundPercentage}%)\n\nYour request has been sent to admin for approval. You will receive the refund within 3-5 business days after approval.`);
+      } else {
+        alert(`Appointment cancelled successfully.\n\nNo refund applicable for this cancellation.`);
+      }
+
+      await fetchAppointments();
       setSelectedAppt(null);
     } catch (err) {
-      setError("Failed to cancel. Please try again.");
+      const errorMessage = err.response?.data?.message || "Failed to cancel. Please try again.";
+      setError(errorMessage);
+      alert(errorMessage);
     } finally {
       setCancelling(null);
     }
@@ -398,18 +452,18 @@ export default function PatientDashboard() {
   const now = new Date();
   const upcoming = appointments.filter(a => {
     const aptDate = new Date(a.dateTime);
-    return aptDate >= now && a.status !== "cancelled" && a.status !== "rejected";
+    return aptDate >= now && a.status !== "cancelled" && a.status !== "rejected" && a.status !== "cancellation_requested";
   }).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
 
   const past = appointments.filter(a => {
     const aptDate = new Date(a.dateTime);
-    return aptDate < now || a.status === "cancelled" || a.status === "rejected";
+    return aptDate < now || a.status === "cancelled" || a.status === "rejected" || a.status === "cancellation_requested";
   }).sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
 
   const firstName = user?.name?.split(" ")[0] || "there";
   const today = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
-  // Stats based on confirmed appointments only
+  // Stats
   const todayCount = upcoming.filter((a) => {
     const d = new Date(a.dateTime);
     return d.toDateString() === now.toDateString();
@@ -417,6 +471,7 @@ export default function PatientDashboard() {
 
   const totalUpcoming = upcoming.length;
   const totalCompleted = past.filter(a => a.status === "completed").length;
+  const pendingCancellations = appointments.filter(a => a.status === "cancellation_requested").length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50/50 to-blue-50/20">
@@ -469,8 +524,8 @@ export default function PatientDashboard() {
 
       <div className="relative max-w-5xl mx-auto px-4 sm:px-6 -mt-16 pb-12 space-y-6">
 
-        {/* Stat cards - Only showing confirmed appointment stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           <StatCard loading={loading} label="Confirmed" value={totalUpcoming} color="blue"
             icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
           />
@@ -483,6 +538,9 @@ export default function PatientDashboard() {
           <StatCard loading={loading} label="Total" value={appointments.length} color="amber"
             icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>}
           />
+          <StatCard loading={loading} label="Pending Cancellations" value={pendingCancellations} color="amber"
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+          />
         </div>
 
         {/* Error banner */}
@@ -493,6 +551,24 @@ export default function PatientDashboard() {
             </svg>
             {error}
             <button onClick={fetchAppointments} className="ml-auto text-xs underline font-semibold">Retry</button>
+          </div>
+        )}
+
+        {/* Pending Cancellations Alert */}
+        {pendingCancellations > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-sm font-bold text-amber-800">Cancellation Request Pending</p>
+                <p className="text-xs text-amber-700">
+                  You have {pendingCancellations} cancellation request{pendingCancellations !== 1 ? "s" : ""} awaiting admin approval.
+                  Refunds will be processed within 3-5 business days.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
