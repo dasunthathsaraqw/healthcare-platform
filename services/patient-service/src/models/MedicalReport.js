@@ -21,7 +21,7 @@ const medicalReportSchema = new mongoose.Schema({
   },
   cloudinaryId: {
     type: String, // We save this ID so we can delete the file from the cloud later if needed
-    required: true
+    required: false
   },
   uploadedBy: {
     type: String,

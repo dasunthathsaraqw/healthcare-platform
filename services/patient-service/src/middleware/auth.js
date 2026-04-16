@@ -60,6 +60,7 @@ const authenticate = async (req, res, next) => {
 // Role-based access control
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {
+    console.log(`🔐 Authorize: user=${req.user?.email}, role=${req.user?.role}, allowed=${allowedRoles}`);
     if (!req.user) {
       return res.status(401).json({
         success: false,

@@ -15,26 +15,25 @@ router.use(authenticate);
 
 // Report Routes
 // Notice how we wrap 'upload.single("document")' to prevent infinite hangs!
+// POST /reports
+// POST /reports - with diagnostic logging
 router.post(
-  '/reports', 
-  authorize(ROLES.PATIENT, ROLES.DOCTOR), 
+  '/reports',
+  authorize(ROLES.PATIENT, ROLES.DOCTOR),
   (req, res, next) => {
-    const uploader = upload.single('document');
-    const timeout = setTimeout(() => {
-      if (!res.headersSent) {
-        return res.status(504).json({ success: false, message: 'File upload to Cloudinary timed out.' });
-      }
-    }, 15000); // 15s absolute timeout for upload
-    
-    uploader(req, res, (err) => {
-      clearTimeout(timeout);
-      if (err) {
-        console.error('File Upload Error:', err);
-        if (!res.headersSent) return res.status(500).json({ success: false, message: 'Upload failed: ' + err.message });
-        return;
-      }
-      next();
-    });
+    console.log('[DEBUG] Before multer - Content-Type:', req.headers['content-type']);
+    console.log('[DEBUG] Before multer - Body keys:', req.body ? Object.keys(req.body) : 'req.body is null/undefined');
+    console.log('[DEBUG] Before multer - Is multipart?', req.is('multipart'));
+    next();
+  },
+  upload.single('document'),
+  (req, res, next) => {
+    console.log('[DEBUG] After multer - req.file:', req.file ? 'present' : 'undefined');
+    console.log('[DEBUG] After multer - req.body:', req.body || 'null/undefined');
+    if (!req.file) {
+      console.log('[DEBUG] No file attached! Check field name or file size.');
+    }
+    next();
   },
   patientController.uploadMedicalReport
 );
@@ -51,6 +50,20 @@ router.delete(
   patientController.deleteReport
 );
 
+
+// Prescription Routes
+router.get(
+  '/prescriptions',
+  authorize(ROLES.PATIENT),
+  patientController.getMyPrescriptions
+);
+
+// Report Sharing
+router.post(
+  '/reports/:id/share',
+  authorize(ROLES.PATIENT),
+  patientController.generateShareLink
+);
 
 // Medical History & Dashboard Routes
 router.put(
