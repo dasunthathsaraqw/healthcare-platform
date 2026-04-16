@@ -15,6 +15,10 @@ const {
   updateAppointmentPayment,
   reserveSlot,
   createAppointmentFromReservation,
+  getCancellationRequests,
+  processRefundRequest,
+  rejectCancellationRequest,
+  getCancellationHistory
 } = require("../controllers/appointmentController");
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,4 +70,19 @@ router.patch("/:id/payment", authenticate, updateAppointmentPayment);
 // GET  /api/appointments/:id               ← Single appointment lookup
 router.get("/:id", authenticate, getAppointmentById);
 
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN ROUTES (for managing cancellations/refunds)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/appointments/admin/cancellation-requests - Get all pending refund requests
+router.get("/admin/cancellation-requests", getCancellationRequests);
+
+// PUT /api/appointments/admin/cancellation-requests/:id/process - Mark refund as processed
+router.put("/admin/cancellation-requests/:id/process", processRefundRequest);
+
+// PUT /api/appointments/admin/cancellation-requests/:id/reject - Reject cancellation
+router.put("/admin/cancellation-requests/:id/reject", rejectCancellationRequest);
+router.get("/admin/cancellation-history", getCancellationHistory);
 module.exports = router;

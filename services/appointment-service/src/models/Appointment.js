@@ -49,7 +49,7 @@ const appointmentSchema = new mongoose.Schema(
     // ── Status lifecycle ──────────────────────────────────────────────────────
     status: {
       type: String,
-      enum: ["pending", "confirmed", "completed", "cancelled", "rejected"],
+      enum: ["pending", "confirmed", "completed", "cancelled", "rejected","cancellation_requested"],
       default: "pending",
       index: true,
     },
@@ -120,6 +120,12 @@ const appointmentSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    refundRequested: { type: Boolean, default: false },
+    refundAmount: { type: Number, default: null },
+    refundRequestedAt: { type: Date, default: null },
+    refundProcessedBy: { type: String, default: null },
+    refundProcessedAt: { type: Date, default: null },
+    adminNotes: { type: String, default: null }
   },
   {
     timestamps: true,
@@ -130,6 +136,6 @@ const appointmentSchema = new mongoose.Schema(
 appointmentSchema.index({ patientId: 1, dateTime: 1 });
 appointmentSchema.index({ doctorId: 1, dateTime: 1 });
 appointmentSchema.index({ doctorId: 1, status: 1 });
-appointmentSchema.index({ availabilityId: 1 }); // NEW index
+//appointmentSchema.index({ availabilityId: 1 }); // NEW index
 
 module.exports = mongoose.model("Appointment", appointmentSchema);
