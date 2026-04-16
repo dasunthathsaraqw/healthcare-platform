@@ -189,11 +189,16 @@ services:
       - "3008:3008"
     environment:
       - PORT=3008
+      - MONGODB_URI=mongodb://telemedicine-db:27017/telemedicinedb
       - DB_URL=mongodb://telemedicine-db:27017/telemedicinedb
       - JWT_SECRET=your-super-secret-jwt-key-change-this
       - APPOINTMENT_SERVICE_URL=http://appointment-service:3003
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - NODE_ENV=development
+      - AGORA_APP_ID=a3130664ecfd48be930fe29cae4a64e0
+      - AGORA_APP_CERTIFICATE=8a7ce858b71a4e28a519e5150a00c23b
+      - AGORA_TOKEN_EXPIRY=3600
+      - FRONTEND_URL=http://localhost:3000
     depends_on:
       - telemedicine-db
       - appointment-service
