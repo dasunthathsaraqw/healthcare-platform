@@ -160,6 +160,7 @@ export default function ReportsPage() {
           headers: {
             "Content-Type": "multipart/form-data",
           },
+          timeout: 120000,
           onUploadProgress: (e) => {
             const pct = Math.round((e.loaded * 100) / e.total);
             setUploadProgress(pct);
