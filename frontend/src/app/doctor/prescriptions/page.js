@@ -78,7 +78,7 @@ function PrescriptionModal({ open, rx, onClose }) {
         {/* Header */}
         <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-cyan-50 shrink-0">
           <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           </div>
           <div className="min-w-0">
             <p className="text-sm font-bold text-gray-900 truncate">{rx.diagnosis}</p>
@@ -89,11 +89,11 @@ function PrescriptionModal({ open, rx, onClose }) {
           <div className="ml-auto flex items-center gap-2">
             <button onClick={handlePrint}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 text-blue-600 text-xs font-bold hover:bg-blue-50 transition-colors">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
               Print
             </button>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
         </div>
@@ -195,10 +195,10 @@ function Pagination({ page, total, pageSize, onChange }) {
 export default function PrescriptionsPage() {
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch]   = useState("");
+  const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate]     = useState("");
-  const [page, setPage]         = useState(1);
+  const [toDate, setToDate] = useState("");
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null); // prescription to view in modal
 
   const fetchPrescriptions = useCallback(async () => {
@@ -223,7 +223,7 @@ export default function PrescriptionsPage() {
     const matchSearch = !search || name.includes(q) || meds.includes(q) || rx.diagnosis?.toLowerCase().includes(q);
     const issued = rx.issuedAt ? new Date(rx.issuedAt) : null;
     const matchFrom = !fromDate || (issued && issued >= new Date(fromDate));
-    const matchTo   = !toDate   || (issued && issued <= new Date(toDate + "T23:59:59"));
+    const matchTo = !toDate || (issued && issued <= new Date(toDate + "T23:59:59"));
     return matchSearch && matchFrom && matchTo;
   });
 
@@ -249,7 +249,7 @@ export default function PrescriptionsPage() {
         {/* Filters */}
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             <input type="text" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search by patient, medication, or diagnosis…"
               className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 placeholder-gray-400
@@ -304,7 +304,7 @@ export default function PrescriptionsPage() {
             <div className="divide-y divide-gray-100">
               {paginated.map((rx) => {
                 const patientName = rx.patientId?.name || rx.patientName || "Unknown Patient";
-                const firstMed    = rx.medications?.[0];
+                const firstMed = rx.medications?.[0];
                 return (
                   <div key={rx._id}
                     className="grid grid-cols-12 gap-2 items-center px-5 py-3.5 hover:bg-blue-50/30 transition-colors group">

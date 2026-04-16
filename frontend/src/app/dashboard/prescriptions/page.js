@@ -16,7 +16,9 @@ function authHeaders() {
 export default function PatientPrescriptionsPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
 
   const downloadAsPdf = (rx) => {
     const doc = new jsPDF();
@@ -84,7 +86,7 @@ export default function PatientPrescriptionsPage() {
   useEffect(() => {
     const loadPrescriptions = async () => {
       setLoading(true);
-      setError("");
+      setLoadError("");
       try {
         const rawUser = localStorage.getItem("user");
         const user = rawUser ? JSON.parse(rawUser) : null;
@@ -97,7 +99,7 @@ export default function PatientPrescriptionsPage() {
         );
         setItems(res.data?.prescriptions || []);
       } catch (err) {
-        setError(err?.response?.data?.message || err.message || "Failed to load prescriptions.");
+        setLoadError(err?.response?.data?.message || err.message || "Failed to load prescriptions.");
       } finally {
         setLoading(false);
       }
@@ -105,6 +107,21 @@ export default function PatientPrescriptionsPage() {
 
     loadPrescriptions();
   }, []);
+
+  const handleDelete = async (rx) => {
+    const title = rx.diagnosis || "Prescription";
+    if (!window.confirm(`Remove "${title}" from your list? This cannot be undone.`)) return;
+    setDeletingId(rx._id);
+    setActionError("");
+    try {
+      await axios.delete(`${API_BASE}/doctors/prescriptions/${rx._id}`, { headers: authHeaders() });
+      setItems((prev) => prev.filter((p) => p._id !== rx._id));
+    } catch (err) {
+      setActionError(err?.response?.data?.message || err.message || "Failed to delete prescription.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -119,21 +136,26 @@ export default function PatientPrescriptionsPage() {
         </div>
       )}
 
-      {!loading && error && (
+      {!loading && loadError && (
         <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-sm text-red-600">
-          {error}
+          {loadError}
         </div>
       )}
 
-      {!loading && !error && items.length === 0 && (
+      {!loading && !loadError && items.length === 0 && (
         <div className="bg-white border border-gray-100 rounded-xl p-8 text-center">
           <p className="text-sm font-semibold text-gray-700">No prescriptions yet</p>
           <p className="text-xs text-gray-400 mt-1">Issued prescriptions will appear here.</p>
         </div>
       )}
 
-      {!loading && !error && items.length > 0 && (
+      {!loading && !loadError && items.length > 0 && (
         <div className="space-y-3">
+          {actionError && (
+            <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-sm text-red-600">
+              {actionError}
+            </div>
+          )}
           {items.map((rx) => (
             <div key={rx._id} className="bg-white border border-gray-100 rounded-xl p-4">
               <div className="flex items-center justify-between gap-3">
@@ -150,12 +172,21 @@ export default function PatientPrescriptionsPage() {
                 {(rx.medications || []).length} medication{(rx.medications || []).length !== 1 ? "s" : ""}
               </p>
               {rx.notes && <p className="text-xs text-gray-600 mt-2">{rx.notes}</p>}
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => downloadAsPdf(rx)}
                   className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
                 >
                   Download PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(rx)}
+                  disabled={deletingId === rx._id}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                >
+                  {deletingId === rx._id ? "Removing…" : "Delete"}
                 </button>
               </div>
             </div>

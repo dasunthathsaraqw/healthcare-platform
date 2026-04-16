@@ -67,6 +67,7 @@ app.get("/", (req, res) => {
       "PUT    /api/doctors/appointments/:id/complete",
       "GET    /api/doctors/prescriptions",
       "POST   /api/doctors/prescriptions",
+      "DELETE /api/doctors/prescriptions/:prescriptionId",
       "GET    /api/doctors/patients",
       "GET    /api/doctors/patients/:patientId",
       "GET    /api/doctors/dashboard/stats",

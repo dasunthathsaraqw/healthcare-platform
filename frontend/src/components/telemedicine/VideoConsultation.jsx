@@ -82,13 +82,13 @@ export default function VideoConsultation({
   const [error, setError] = useState("");
   const [remoteUserJoined, setRemoteUserJoined] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  
+
   const clientRef = useRef(null);
   const localAudioTrackRef = useRef(null);
   const localVideoTrackRef = useRef(null);
   const remoteAudioTrackRef = useRef(null);
   const remoteVideoTrackRef = useRef(null);
-  
+
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
 
@@ -136,11 +136,11 @@ export default function VideoConsultation({
         { uid: 0 },
         { headers: authHeaders() }
       );
-      
+
       // API returns { success, data: { appId, channelName, token, uid, ... } }
       const sessionData = response.data?.data || response.data;
       const { appId, channelName, token, uid } = sessionData;
-      
+
       if (!appId || !channelName || !token) {
         throw new Error("Invalid session data from server");
       }
@@ -161,7 +161,7 @@ export default function VideoConsultation({
 
       // Join channel
       await client.join(appId, channelName, token, uid);
-      
+
       // Create and publish local tracks
       const [localAudioTrack, localVideoTrack] = await Promise.all([
         AgoraRTC.createMicrophoneAudioTrack(),
@@ -180,7 +180,7 @@ export default function VideoConsultation({
       }
 
       setCallStatus(CALL_STATUS.WAITING);
-      
+
     } catch (err) {
       console.error("Failed to initialize session:", err);
       setError(getJoinErrorMessage(err));
@@ -194,13 +194,13 @@ export default function VideoConsultation({
       if (mediaType === "video") {
         const remoteVideoTrack = await clientRef.current.subscribe(user, mediaType);
         remoteVideoTrackRef.current = remoteVideoTrack;
-        
+
         if (remoteVideoRef.current) {
           remoteVideoTrack.play(remoteVideoRef.current);
         } else {
           console.error("remoteVideoRef is null, cannot play video track");
         }
-        
+
         setRemoteUserJoined(true);
         setCallStatus(CALL_STATUS.CONNECTED);
       } else if (mediaType === "audio") {
@@ -252,7 +252,7 @@ export default function VideoConsultation({
   // Handle connection state changes
   const handleConnectionStateChange = (newState, reason) => {
     console.log("Connection state changed:", newState, reason);
-    
+
     if (newState === "CONNECTED") {
       setCallStatus(CALL_STATUS.CONNECTED);
     } else if (newState === "DISCONNECTED") {
@@ -295,12 +295,12 @@ export default function VideoConsultation({
       await cleanupSession();
 
       setCallStatus(CALL_STATUS.ENDED);
-      
+
       // Call onLeave callback after cleanup
       setTimeout(() => {
         onLeave?.();
       }, 1000);
-      
+
     } catch (err) {
       console.error("Error leaving call:", err);
       onLeave?.();
@@ -330,120 +330,119 @@ export default function VideoConsultation({
     <div className="h-full flex flex-col bg-gray-900">
       {/* Status Bar */}
       {!compact && (
-      <div className="bg-gray-800 px-4 py-2 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2">
-          <span className={`inline-block w-2 h-2 rounded-full ${statusConfig.dot} ${callStatus === CALL_STATUS.CONNECTING ? 'animate-pulse' : ''}`} />
-          <span className={`text-xs font-medium px-2 py-1 rounded-full border ${statusConfig.color}`}>
-            {statusConfig.label}
-          </span>
+        <div className="bg-gray-800 px-4 py-2 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <span className={`inline-block w-2 h-2 rounded-full ${statusConfig.dot} ${callStatus === CALL_STATUS.CONNECTING ? 'animate-pulse' : ''}`} />
+            <span className={`text-xs font-medium px-2 py-1 rounded-full border ${statusConfig.color}`}>
+              {statusConfig.label}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400">{userRole === "doctor" ? "Doctor View" : "Patient View"}</span>
+            {/* Chat toggle */}
+            <button
+              onClick={() => setChatOpen((o) => !o)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${chatOpen ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+              title="Toggle Chat"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+              Chat
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400">{userRole === "doctor" ? "Doctor View" : "Patient View"}</span>
-          {/* Chat toggle */}
-          <button
-            onClick={() => setChatOpen((o) => !o)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              chatOpen ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-            }`}
-            title="Toggle Chat"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-            Chat
-          </button>
-        </div>
-      </div>
       )}
 
       {/* Main content: Video + optional Chat */}
       <div className="flex-1 flex overflow-hidden min-h-0">
 
-      {/* Video Area */}
-      <div className="flex-1 relative bg-black">
-        {compact && callStatus !== CALL_STATUS.ERROR && !error && (
-          <div className="absolute top-3 left-3 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 backdrop-blur-sm">
-            <span className={`inline-block h-2 w-2 rounded-full ${statusConfig.dot} ${callStatus === CALL_STATUS.CONNECTING ? "animate-pulse" : ""}`} />
-            <span className="text-xs font-medium text-white/90">{statusConfig.label}</span>
-          </div>
-        )}
-        {/* Remote Video (Main) */}
-        <div className="absolute inset-0">
-          {/* Always render the video container so the ref is immediately available */}
-          <div
-            ref={remoteVideoRef}
-            className={`w-full h-full ${remoteUserJoined ? "block" : "hidden"}`}
-            style={{ objectFit: "cover" }}
-          />
-          
-          {/* Placeholder for when no remote user is joined */}
-          {!remoteUserJoined && (
-            <div className="w-full h-full flex items-center justify-center absolute inset-0 bg-black z-10">
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-gray-800 mx-auto mb-4 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <p className="text-gray-400 text-sm">
-                  {callStatus === CALL_STATUS.WAITING ? "Waiting for other participant to join..." : "No remote video"}
-                </p>
-              </div>
+        {/* Video Area */}
+        <div className="flex-1 relative bg-black">
+          {compact && callStatus !== CALL_STATUS.ERROR && !error && (
+            <div className="absolute top-3 left-3 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 backdrop-blur-sm">
+              <span className={`inline-block h-2 w-2 rounded-full ${statusConfig.dot} ${callStatus === CALL_STATUS.CONNECTING ? "animate-pulse" : ""}`} />
+              <span className="text-xs font-medium text-white/90">{statusConfig.label}</span>
             </div>
           )}
-        </div>
-
-        {/* Local Video (Picture-in-Picture) */}
-        <div className="absolute top-4 right-4 w-32 h-24 sm:w-48 sm:h-36 bg-gray-800 rounded-lg overflow-hidden shadow-lg">
-          {isCameraOff ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </div>
-          ) : (
+          {/* Remote Video (Main) */}
+          <div className="absolute inset-0">
+            {/* Always render the video container so the ref is immediately available */}
             <div
-              ref={localVideoRef}
-              className="w-full h-full"
-              style={{ objectFit: "cover", transform: "scaleX(-1)" }}
+              ref={remoteVideoRef}
+              className={`w-full h-full ${remoteUserJoined ? "block" : "hidden"}`}
+              style={{ objectFit: "cover" }}
             />
-          )}
-          {isMuted && (
-            <div className="absolute bottom-2 left-2 w-6 h-6 bg-red-600 rounded-full flex items-center justify-center">
-              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-              </svg>
-            </div>
-          )}
-        </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="absolute top-4 left-4 bg-red-900/90 text-red-200 px-4 py-3 rounded-lg max-w-md">
-            <div className="flex items-start gap-2">
-              <svg className="w-5 h-5 text-red-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium">Connection Error</p>
-                <p className="text-xs mt-1">{error}</p>
+            {/* Placeholder for when no remote user is joined */}
+            {!remoteUserJoined && (
+              <div className="w-full h-full flex items-center justify-center absolute inset-0 bg-black z-10">
+                <div className="text-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-800 mx-auto mb-4 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-400 text-sm">
+                    {callStatus === CALL_STATUS.WAITING ? "Waiting for other participant to join..." : "No remote video"}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Local Video (Picture-in-Picture) */}
+          <div className="absolute top-4 right-4 w-32 h-24 sm:w-48 sm:h-36 bg-gray-800 rounded-lg overflow-hidden shadow-lg">
+            {isCameraOff ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+            ) : (
+              <div
+                ref={localVideoRef}
+                className="w-full h-full"
+                style={{ objectFit: "cover", transform: "scaleX(-1)" }}
+              />
+            )}
+            {isMuted && (
+              <div className="absolute bottom-2 left-2 w-6 h-6 bg-red-600 rounded-full flex items-center justify-center">
+                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+              </div>
+            )}
+          </div>
+
+          {/* Error Display */}
+          {error && (
+            <div className="absolute top-4 left-4 bg-red-900/90 text-red-200 px-4 py-3 rounded-lg max-w-md">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 text-red-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium">Connection Error</p>
+                  <p className="text-xs mt-1">{error}</p>
+                </div>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Chat Side Panel */}
+        {!compact && chatOpen && (
+          <div className="w-80 shrink-0 flex flex-col border-l border-gray-700">
+            <ChatPanel
+              appointmentId={appointmentId}
+              otherPartyName={otherParty}
+              className="flex-1 h-full"
+            />
           </div>
         )}
-      </div>
-
-      {/* Chat Side Panel */}
-      {!compact && chatOpen && (
-        <div className="w-80 shrink-0 flex flex-col border-l border-gray-700">
-          <ChatPanel
-            appointmentId={appointmentId}
-            otherPartyName={otherParty}
-            className="flex-1 h-full"
-          />
-        </div>
-      )}
 
       </div>{/* end main content row */}
 
@@ -452,11 +451,10 @@ export default function VideoConsultation({
         <div className="flex items-center justify-center gap-4">
           <button
             onClick={toggleMicrophone}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-              isMuted
+            className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${isMuted
                 ? "bg-red-600 text-white hover:bg-red-700"
                 : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-            }`}
+              }`}
             title={isMuted ? "Unmute microphone" : "Mute microphone"}
           >
             {isMuted ? (
@@ -473,11 +471,10 @@ export default function VideoConsultation({
 
           <button
             onClick={toggleCamera}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-              isCameraOff
+            className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${isCameraOff
                 ? "bg-red-600 text-white hover:bg-red-700"
                 : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-            }`}
+              }`}
             title={isCameraOff ? "Turn on camera" : "Turn off camera"}
           >
             {isCameraOff ? (
