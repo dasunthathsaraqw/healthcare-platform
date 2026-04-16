@@ -36,13 +36,45 @@ const MOCK_USER = {
   name:   process.env.MOCK_USER_NAME  || "Mock User",
 };
 
+const buildUserFromDecodedToken = (decoded) => ({
+  id:     decoded.userId || decoded.id || decoded._id,
+  userId: decoded.userId || decoded.id || decoded._id,
+  role:   decoded.role   || "patient",
+  email:  decoded.email  || "",
+  name:   decoded.name   || "",
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // authenticate — verifies Bearer JWT or injects mock user
 // ─────────────────────────────────────────────────────────────────────────────
 const authenticate = (req, res, next) => {
   try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : null;
+
+    // Service-to-service: accept INTERNAL_SECRET as a bearer token
+    const internalSecret = process.env.INTERNAL_SECRET;
+    if (internalSecret && token === internalSecret) {
+      req.user = { id: "system", role: "admin", name: "Internal Service" };
+      return next();
+    }
+
     // ── BYPASS MODE (dev/testing only) ────────────────────────────────────────
     if (process.env.BYPASS_AUTH === "true") {
+      // Even in BYPASS mode, prefer the real JWT if provided so doctor/patient
+      // identities remain distinct during local multi-user testing.
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, JWT_SECRET);
+          req.user = buildUserFromDecodedToken(decoded);
+          return next();
+        } catch (_err) {
+          // Fall back to mock user in BYPASS mode when token is invalid.
+        }
+      }
+
       console.warn(
         `⚠️  [AuthMiddleware] BYPASS_AUTH is ON — using mock user: ` +
         `${MOCK_USER.role}/${MOCK_USER.id}`
@@ -52,22 +84,11 @@ const authenticate = (req, res, next) => {
     }
 
     // ── REAL JWT VERIFICATION ─────────────────────────────────────────────────
-    const authHeader = req.headers.authorization;
-
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
         success: false,
         message: "Authentication required. No token provided.",
       });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    // Service-to-service: accept INTERNAL_SECRET as a bearer token
-    const internalSecret = process.env.INTERNAL_SECRET;
-    if (internalSecret && token === internalSecret) {
-      req.user = { id: "system", role: "admin", name: "Internal Service" };
-      return next();
     }
 
     let decoded;
@@ -87,13 +108,7 @@ const authenticate = (req, res, next) => {
     }
 
     // Normalise: patient-service uses userId; doctor-service uses id
-    req.user = {
-      id:     decoded.userId || decoded.id || decoded._id,
-      userId: decoded.userId || decoded.id || decoded._id,
-      role:   decoded.role   || "patient",
-      email:  decoded.email  || "",
-      name:   decoded.name   || "",
-    };
+    req.user = buildUserFromDecodedToken(decoded);
 
     next();
   } catch (error) {

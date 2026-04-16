@@ -5,7 +5,9 @@ import axios from "axios";
 import AgoraRTC from "agora-rtc-sdk-ng";
 import ChatPanel from "./ChatPanel";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const rawApiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const normalizedApiBase = rawApiBase.replace(/\/+$/, "");
+const API_BASE = /\/api$/i.test(normalizedApiBase) ? normalizedApiBase : `${normalizedApiBase}/api`;
 
 function authHeaders() {
   const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -76,6 +78,37 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
   
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+
+  const cleanupSession = useCallback(async () => {
+    // Stop and close local tracks
+    if (localAudioTrackRef.current) {
+      localAudioTrackRef.current.stop();
+      localAudioTrackRef.current.close();
+      localAudioTrackRef.current = null;
+    }
+    if (localVideoTrackRef.current) {
+      localVideoTrackRef.current.stop();
+      localVideoTrackRef.current.close();
+      localVideoTrackRef.current = null;
+    }
+
+    // Stop remote tracks
+    if (remoteAudioTrackRef.current) {
+      remoteAudioTrackRef.current.stop();
+      remoteAudioTrackRef.current = null;
+    }
+    if (remoteVideoTrackRef.current) {
+      remoteVideoTrackRef.current.stop();
+      remoteVideoTrackRef.current = null;
+    }
+
+    // Leave channel and destroy client
+    if (clientRef.current) {
+      await clientRef.current.leave();
+      clientRef.current.removeAllListeners();
+      clientRef.current = null;
+    }
+  }, []);
 
   // Initialize Agora client and join session
   const initializeSession = useCallback(async () => {
@@ -246,31 +279,7 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
   // Leave call
   const leaveCall = useCallback(async () => {
     try {
-      // Stop and close local tracks
-      if (localAudioTrackRef.current) {
-        localAudioTrackRef.current.stop();
-        localAudioTrackRef.current.close();
-      }
-      if (localVideoTrackRef.current) {
-        localVideoTrackRef.current.stop();
-        localVideoTrackRef.current.close();
-      }
-
-      // Stop remote tracks
-      if (remoteAudioTrackRef.current) {
-        remoteAudioTrackRef.current.stop();
-        // remoteAudioTrackRef.current.close(); // Not allowed on remote tracks
-      }
-      if (remoteVideoTrackRef.current) {
-        remoteVideoTrackRef.current.stop();
-        // remoteVideoTrackRef.current.close(); // Not allowed on remote tracks
-      }
-
-      // Leave channel and destroy client
-      if (clientRef.current) {
-        await clientRef.current.leave();
-        clientRef.current.removeAllListeners();
-      }
+      await cleanupSession();
 
       setCallStatus(CALL_STATUS.ENDED);
       
@@ -283,7 +292,7 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
       console.error("Error leaving call:", err);
       onLeave?.();
     }
-  }, [onLeave]);
+  }, [cleanupSession, onLeave]);
 
   // Initialize session on component mount
   useEffect(() => {
@@ -293,9 +302,11 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
 
     // Cleanup on unmount
     return () => {
-      leaveCall();
+      cleanupSession().catch((err) => {
+        console.error("Error during session cleanup:", err);
+      });
     };
-  }, [appointmentId, initializeSession, leaveCall]);
+  }, [appointmentId, cleanupSession, initializeSession]);
 
   const statusConfig = STATUS_CONFIG[callStatus] || STATUS_CONFIG[CALL_STATUS.CONNECTING];
 
