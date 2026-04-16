@@ -7,7 +7,7 @@ const APPOINTMENT_SERVICE_URL = process.env.APPOINTMENT_SERVICE_URL || "http://l
 // ─── POST /api/payments/initiate ─────────────────────────────────────────────
 exports.initiatePayment = async (req, res) => {
   try {
-    const { appointmentId, amount, patientName, patientEmail, patientPhone } = req.body;
+    const { appointmentId, amount, patientName, patientEmail, patientPhone, reservationId } = req.body;
 
     console.log("🔄 Initiating PayHere payment for appointment:", appointmentId);
     console.log(`   - Amount: Rs. ${amount}`);
@@ -38,6 +38,7 @@ exports.initiatePayment = async (req, res) => {
         patientName: patientName || req.user.name || "Patient",
         patientEmail: patientEmail || req.user.email || "",
         patientPhone: patientPhone || "0771234567",
+        reservationId,
       },
     });
     await payment.save();
@@ -93,74 +94,105 @@ exports.initiatePayment = async (req, res) => {
 };
 
 // ─── POST /api/payments/notify ───────────────────────────────────────────────
+// In payment-service/src/controllers/paymentController.js
+
+// ─── POST /api/payments/notify ───────────────────────────────────────────────
 exports.handleNotify = async (req, res) => {
   try {
-    console.log("🔔 PayHere Notification Received:");
-    Object.keys(req.body).forEach(key => {
-      console.log(`   - ${key}: ${req.body[key]}`);
-    });
-
-    // Verify signature using Java-compatible method
-    if (!verifyNotifyHash(req.body)) {
-      console.error("❌ Webhook signature verification FAILED");
-      return res.status(200).send("OK"); // Always return 200 to PayHere
-    }
+    console.log("📨 PayHere notify received:", req.body);
 
     const { order_id, payment_id, status_code } = req.body;
+
+    // Verify signature
+    const isValid = verifyNotifyHash(req.body);
+    if (!isValid) {
+      console.warn("⚠️ Invalid signature — possible tampered request");
+    }
 
     // Find payment record
     const payment = await Payment.findOne({ payhereOrderId: order_id });
     if (!payment) {
-      console.warn(`⚠️ Payment not found for order_id: ${order_id}`);
+      console.warn(`Payment not found for order_id: ${order_id}`);
       return res.status(200).send("OK");
     }
 
-    // Map status codes (same as Java's getStatusDescription)
+    // Map status codes
     let newStatus;
-    if (status_code === "2") {
+    if (status_code == "2") {
       newStatus = "completed";
       payment.transactionId = payment_id;
-      console.log(`✅ Payment SUCCESSFUL for: ${order_id}`);
-    } else if (status_code === "0") {
+    } else if (status_code == "0") {
       newStatus = "pending";
-      console.log(`⏳ Payment PENDING for: ${order_id}`);
-    } else if (status_code === "-1") {
+    } else if (status_code == "-1") {
       newStatus = "cancelled";
-      console.log(`❌ Payment CANCELLED for: ${order_id}`);
     } else {
       newStatus = "failed";
-      console.log(`❌ Payment FAILED for: ${order_id}`);
     }
 
     payment.status = newStatus;
     await payment.save();
     console.log(`💳 Payment ${order_id} → ${newStatus}`);
 
-    // If payment successful, update appointment
+    // ✅ If payment successful - create appointment from reservation
     if (newStatus === "completed") {
       try {
-        await axios.patch(
-          `${APPOINTMENT_SERVICE_URL}/api/appointments/${payment.appointmentId}/payment`,
-          {
-            paymentId: payment._id.toString(),
-            paymentStatus: "paid",
-          },
-          {
-            headers: { Authorization: `Bearer ${process.env.JWT_SECRET || "123"}` },
-            timeout: 5000,
+        // Get reservationId from payment metadata
+        const reservationId = payment.metadata?.reservationId;
+        
+        if (reservationId) {
+          // NEW: Create appointment from reservation
+          console.log(`📝 Creating appointment from reservation: ${reservationId}`);
+          
+          const response = await axios.post(
+            `${APPOINTMENT_SERVICE_URL}/api/appointments/create-from-reservation`,
+            {
+              reservationId: reservationId,
+              paymentId: payment._id.toString(),
+            },
+            {
+              headers: { 
+                Authorization: `Bearer ${process.env.INTERNAL_SECRET}`,
+                "Content-Type": "application/json"
+              },
+              timeout: 10000,
+            }
+          );
+          
+          console.log(`✅ Appointment created successfully:`, response.data);
+          
+          // Update payment with appointment ID
+          if (response.data.appointment?._id) {
+            payment.metadata = {
+              ...payment.metadata,
+              appointmentId: response.data.appointment._id
+            };
+            await payment.save();
           }
-        );
-        console.log(`✅ Appointment ${payment.appointmentId} marked as paid`);
+        } else {
+          // FALLBACK: Old method for existing data
+          console.log(`⚠️ No reservationId found, using old payment update method`);
+          await axios.patch(
+            `${APPOINTMENT_SERVICE_URL}/api/appointments/${payment.appointmentId}/payment`,
+            {
+              paymentId: payment._id.toString(),
+              paymentStatus: "paid",
+            },
+            {
+              headers: { Authorization: `Bearer ${process.env.JWT_SECRET || "123"}` },
+              timeout: 5000,
+            }
+          );
+        }
       } catch (err) {
-        console.error("Failed to update appointment:", err.message);
+        console.error("❌ Failed to create/update appointment:", err.response?.data || err.message);
+        // Don't fail the webhook - PayHere will retry
       }
     }
 
-    // PayHere requires plain text "OK" response
+    // PayHere REQUIRES plain text "OK"
     return res.status(200).send("OK");
-
   } catch (error) {
-    console.error("❌ Notification processing error:", error);
+    console.error("handleNotify error:", error);
     return res.status(200).send("OK");
   }
 };
