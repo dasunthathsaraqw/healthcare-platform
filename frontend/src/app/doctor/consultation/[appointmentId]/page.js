@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import axios from "axios";
 import ChatPanel from "@/components/telemedicine/ChatPanel";
+
+const VideoConsultation = dynamic(
+  () => import("@/components/telemedicine/VideoConsultation"),
+  { ssr: false, loading: () => <div className="h-full w-full animate-pulse bg-slate-800" /> }
+);
 
 const API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
 
@@ -22,165 +28,7 @@ function getInitials(name = "") {
   return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
 }
 
-function fmtDuration(secs) {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
 const BLANK_MED = { name: "", dosage: "", frequency: "", duration: "", instructions: "" };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// VIDEO PLACEHOLDER
-// ─────────────────────────────────────────────────────────────────────────────
-
-function PatientVideoFeed({ patientName, camOn }) {
-  const initials = getInitials(patientName || "Patient");
-  return (
-    <div className="relative w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center overflow-hidden">
-      {/* Simulated video noise texture */}
-      <div className="absolute inset-0 opacity-5"
-        style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")", backgroundSize: "200px" }} />
-
-      {/* Live indicator */}
-      <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 bg-red-600/90 rounded-full">
-        <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-        <span className="text-white text-xs font-bold tracking-wider">LIVE</span>
-      </div>
-
-      {/* Connection quality */}
-      <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 bg-black/40 rounded-full">
-        {[1,2,3,4].map((b) => (
-          <div key={b} className={`w-1 rounded-full bg-green-400 ${b === 1 ? "h-2" : b === 2 ? "h-3" : b === 3 ? "h-4" : "h-5"}`} />
-        ))}
-        <span className="text-white text-[10px] ml-1 font-medium">HD</span>
-      </div>
-
-      {/* Patient avatar (shown if camera "off") */}
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white text-4xl font-bold shadow-2xl ring-4 ring-white/10">
-          {initials}
-        </div>
-        <div className="text-center">
-          <p className="text-white text-lg font-semibold">{patientName || "Patient"}</p>
-          <p className="text-slate-400 text-sm mt-0.5 flex items-center gap-1.5 justify-center">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            Video call active
-          </p>
-        </div>
-        {/* SDK placeholder notice */}
-        <div className="mt-4 px-4 py-2.5 bg-black/40 rounded-xl border border-white/10 text-center max-w-xs">
-          <p className="text-slate-300 text-xs font-medium">📹 Video SDK Placeholder</p>
-          <p className="text-slate-500 text-[11px] mt-1">Agora / Twilio will be integrated here</p>
-        </div>
-      </div>
-
-      {/* Bottom patient name bar */}
-      <div className="absolute bottom-4 left-4 px-3 py-1.5 bg-black/60 rounded-lg">
-        <p className="text-white text-sm font-medium">{patientName || "Patient"}</p>
-      </div>
-    </div>
-  );
-}
-
-function DoctorPiP({ camOn, micOn, doctorName }) {
-  return (
-    <div className="absolute bottom-24 right-4 w-36 h-24 sm:w-44 sm:h-28 bg-gradient-to-br from-blue-900 to-slate-800 rounded-xl overflow-hidden border-2 border-white/20 shadow-xl z-10">
-      {camOn ? (
-        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-800 to-slate-700">
-          <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
-            {getInitials(doctorName || "Dr")}
-          </div>
-        </div>
-      ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">
-          <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
-          </svg>
-          <span className="text-slate-400 text-[10px]">Camera off</span>
-        </div>
-      )}
-      <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 px-1.5 py-0.5 bg-black/60 rounded-md">
-        <p className="text-white text-[9px] font-medium">You</p>
-        {!micOn && <svg className="w-2.5 h-2.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 19L5 5M12 18.5v-1m-4-4a4 4 0 005.66-5.66M12 5a4 4 0 014 4v1m-1.32 3.68L7.76 8.12"/></svg>}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONTROL BAR
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ControlBtn({ active, danger, onClick, label, icon, disabled }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-      className={`flex flex-col items-center gap-1 group disabled:opacity-50`}
-    >
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shadow-lg
-        ${danger
-          ? "bg-red-500 hover:bg-red-600 shadow-red-900/30"
-          : active
-          ? "bg-white/20 hover:bg-white/30"
-          : "bg-slate-700 hover:bg-slate-600"
-        }`}>
-        {icon}
-      </div>
-      <span className="text-[10px] text-slate-400 group-hover:text-slate-300 transition-colors hidden sm:block">
-        {label}
-      </span>
-    </button>
-  );
-}
-
-function ControlBar({ camOn, micOn, screenSharing, duration, onCam, onMic, onScreen, onEndCall }) {
-  return (
-    <div className="absolute bottom-0 left-0 right-0 z-10 px-4 py-4 flex items-center justify-center gap-4 sm:gap-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
-      {/* Timer */}
-      <div className="absolute left-4 bottom-5 flex items-center gap-2 px-3 py-1.5 bg-black/50 rounded-full">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-        <span className="text-white text-xs font-mono font-bold">{fmtDuration(duration)}</span>
-      </div>
-
-      <ControlBtn
-        label={micOn ? "Mute" : "Unmute"}
-        active={micOn}
-        onClick={onMic}
-        icon={micOn
-          ? <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
-          : <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 19L5 5M12 18.5v-1m-4-4a4 4 0 005.66-5.66M12 5a4 4 0 014 4v1m-1.32 3.68L7.76 8.12"/></svg>
-        }
-      />
-      <ControlBtn
-        label={camOn ? "Stop Video" : "Start Video"}
-        active={camOn}
-        onClick={onCam}
-        icon={camOn
-          ? <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.277A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-          : <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
-        }
-      />
-      <ControlBtn
-        label={screenSharing ? "Stop Share" : "Share Screen"}
-        active={screenSharing}
-        onClick={onScreen}
-        icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>}
-      />
-      <ControlBtn
-        label="End Call"
-        danger
-        onClick={onEndCall}
-        icon={<svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z"/></svg>}
-      />
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MEDICATION ROW
@@ -543,12 +391,6 @@ export default function ConsultationPage() {
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState("");
 
-  // Call controls
-  const [camOn,         setCamOn]         = useState(true);
-  const [micOn,         setMicOn]         = useState(true);
-  const [screenSharing, setScreenSharing] = useState(false);
-  const [duration,      setDuration]      = useState(0);
-
   // Right panel tab (desktop)
   const [panelTab,  setPanelTab]  = useState("info");  // "info" | "prescription" | "chat"
   // Mobile bottom sheet
@@ -561,11 +403,6 @@ export default function ConsultationPage() {
 
   // End call
   const [endModal, setEndModal] = useState(false);
-
-  const doctor = useRef(null);
-  useEffect(() => {
-    try { doctor.current = JSON.parse(localStorage.getItem("user") || "{}"); } catch (_) {}
-  }, []);
 
   // ── Fetch appointment & patient ────────────────────────────────────────────
   useEffect(() => {
@@ -593,12 +430,6 @@ export default function ConsultationPage() {
       }
     })();
   }, [appointmentId]);
-
-  // ── Duration timer ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    const t = setInterval(() => setDuration((d) => d + 1), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   // ── beforeunload warning ───────────────────────────────────────────────────
   useEffect(() => {
@@ -706,19 +537,16 @@ export default function ConsultationPage() {
           </div>
         ) : (
           <>
-            {/* ── LEFT: Video (70%) ─────────────────────────────────────── */}
-            <div className="relative flex-1 lg:w-[70%] min-h-0 h-[55vh] lg:h-full">
-              <PatientVideoFeed patientName={patientName} camOn={camOn} />
-              <DoctorPiP camOn={camOn} micOn={micOn} doctorName={doctor.current?.name} />
-              <ControlBar
-                camOn={camOn}
-                micOn={micOn}
-                screenSharing={screenSharing}
-                duration={duration}
-                onCam={() => setCamOn((v) => !v)}
-                onMic={() => setMicOn((v) => !v)}
-                onScreen={() => setScreenSharing((v) => !v)}
-                onEndCall={handleEndCall}
+            {/* ── LEFT: Agora video (same channel as patient dashboard) ── */}
+            <div className="relative flex min-h-0 flex-1 flex-col lg:h-full lg:w-[70%] h-[55vh]">
+              <VideoConsultation
+                appointmentId={appointmentId}
+                userRole="doctor"
+                doctorName={patientName}
+                peerDisplayName={patientName}
+                compact
+                apiBase={API_BASE}
+                onLeave={handleEndCall}
               />
             </div>
 

@@ -102,6 +102,24 @@ const getSessionByAppointmentId = async (appointmentId) => {
 };
 
 /**
+ * Overwrite stored participant ids with the canonical appointment record.
+ * Used when an older session was created from mock doctor/patient ids.
+ */
+const syncSessionParticipantsFromAppointment = async (appointmentId, appt) => {
+  const session = await TelemedicineSession.findOne({ appointmentId });
+  if (!session) return null;
+
+  session.patientId = appt.patientId;
+  session.doctorId = appt.doctorId;
+  if (appt.patientName != null) session.patientName = appt.patientName;
+  if (appt.doctorName != null) session.doctorName = appt.doctorName;
+  if (appt.specialty != null) session.specialty = appt.specialty;
+
+  await session.save();
+  return session;
+};
+
+/**
  * All sessions for a patient, newest-first. Optional status filter.
  */
 const getSessionsByPatient = async (patientId, statusFilter) => {
@@ -248,6 +266,7 @@ module.exports = {
   createSession,
   getSessionById,
   getSessionByAppointmentId,
+  syncSessionParticipantsFromAppointment,
   getSessionsByPatient,
   getSessionsByDoctor,
   startSession,

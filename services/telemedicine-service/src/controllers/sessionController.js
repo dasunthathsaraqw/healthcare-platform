@@ -5,7 +5,7 @@
 "use strict";
 
 const sessionService                              = require("../services/sessionService");
-const { getAppointmentById, verifyParticipant }   = require("../services/appointment.service");
+const { getAppointmentById } = require("../services/appointment.service");
 const { generateRtcToken, generateUidFromUserId } = require("../services/agora.service");
 const { publishNotificationEvent }                = require("../utils/rabbitmq");
 const { ApiError }                                = require("../utils/ApiError");
@@ -44,7 +44,9 @@ const createSession = async (req, res) => {
 
     // ── Fetch + validate appointment ──────────────────────────────────────────
     // getAppointmentById throws 404 if not found and 422 if not CONFIRMED.
-    const appointment = await getAppointmentById(appointmentId.trim());
+    const appointment = await getAppointmentById(appointmentId.trim(), {
+      authHeader: req.headers.authorization,
+    });
 
     // ── Create session ────────────────────────────────────────────────────────
     const session = await sessionService.createSession({
@@ -121,7 +123,9 @@ const joinSession = async (req, res) => {
       session = await sessionService.getSessionByAppointmentId(appointmentId);
     } catch (notFoundErr) {
       if (notFoundErr.statusCode === 404 || notFoundErr.message.includes("No session found")) {
-        const appointment = await getAppointmentById(appointmentId.trim());
+        const appointment = await getAppointmentById(appointmentId.trim(), {
+          authHeader: req.headers.authorization,
+        });
         session = await sessionService.createSession({
           appointmentId: appointment.appointmentId,
           patientId:     appointment.patientId,
@@ -138,9 +142,33 @@ const joinSession = async (req, res) => {
     }
 
     // Use string comparison to handle ObjectId vs string mismatch
-    const isParticipant =
+    let isParticipant =
       String(session.patientId) === String(callerId) ||
-      String(session.doctorId)  === String(callerId);
+      String(session.doctorId) === String(callerId);
+
+    // Repair sessions created earlier with mock participant ids (same appointmentId / channel).
+    if (!isParticipant && callerRole !== "admin") {
+      try {
+        const appt = await getAppointmentById(appointmentId.trim(), {
+          authHeader: req.headers.authorization,
+        });
+        const onAppointment =
+          String(appt.patientId) === String(callerId) ||
+          String(appt.doctorId) === String(callerId);
+        if (onAppointment) {
+          const updated = await sessionService.syncSessionParticipantsFromAppointment(
+            appointmentId.trim(),
+            appt
+          );
+          if (updated) {
+            session = updated;
+            isParticipant = true;
+          }
+        }
+      } catch (realignErr) {
+        console.warn("[joinSession] Session realign skipped:", realignErr.message);
+      }
+    }
 
     if (!isParticipant && callerRole !== "admin") {
       throw ApiError.forbidden("You are not a participant in this session.");

@@ -5,9 +5,10 @@ import axios from "axios";
 import AgoraRTC from "agora-rtc-sdk-ng";
 import ChatPanel from "./ChatPanel";
 
-const rawApiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
-const normalizedApiBase = rawApiBase.replace(/\/+$/, "");
-const API_BASE = /\/api$/i.test(normalizedApiBase) ? normalizedApiBase : `${normalizedApiBase}/api`;
+function normalizeApiBase(raw) {
+  const trimmed = (raw || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api").replace(/\/+$/, "");
+  return /\/api$/i.test(trimmed) ? trimmed : `${trimmed}/api`;
+}
 
 function authHeaders() {
   const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -62,7 +63,19 @@ const STATUS_CONFIG = {
   },
 };
 
-export default function VideoConsultation({ appointmentId, onLeave, userRole = "patient", doctorName = "Doctor" }) {
+export default function VideoConsultation({
+  appointmentId,
+  onLeave,
+  userRole = "patient",
+  doctorName = "Doctor",
+  /** When true, hide status bar and in-component chat (parent provides layout/chat). */
+  compact = false,
+  /** Optional API root (same as other doctor/patient API calls). Defaults to NEXT_PUBLIC_API_URL. */
+  apiBase: apiBaseProp,
+  /** Name shown for the remote party in chat when userRole is "doctor". */
+  peerDisplayName,
+}) {
+  const API_BASE = normalizeApiBase(apiBaseProp);
   const [callStatus, setCallStatus] = useState(CALL_STATUS.CONNECTING);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
@@ -173,7 +186,7 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
       setError(getJoinErrorMessage(err));
       setCallStatus(CALL_STATUS.ERROR);
     }
-  }, [appointmentId]);
+  }, [appointmentId, API_BASE]);
 
   // Handle remote user publishing tracks
   const handleUserPublished = async (user, mediaType) => {
@@ -310,11 +323,13 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
 
   const statusConfig = STATUS_CONFIG[callStatus] || STATUS_CONFIG[CALL_STATUS.CONNECTING];
 
-  const otherParty = userRole === "doctor" ? "Patient" : doctorName;
+  const otherParty =
+    peerDisplayName ?? (userRole === "doctor" ? "Patient" : doctorName);
 
   return (
     <div className="h-full flex flex-col bg-gray-900">
       {/* Status Bar */}
+      {!compact && (
       <div className="bg-gray-800 px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <span className={`inline-block w-2 h-2 rounded-full ${statusConfig.dot} ${callStatus === CALL_STATUS.CONNECTING ? 'animate-pulse' : ''}`} />
@@ -339,12 +354,19 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
           </button>
         </div>
       </div>
+      )}
 
       {/* Main content: Video + optional Chat */}
       <div className="flex-1 flex overflow-hidden min-h-0">
 
       {/* Video Area */}
       <div className="flex-1 relative bg-black">
+        {compact && callStatus !== CALL_STATUS.ERROR && !error && (
+          <div className="absolute top-3 left-3 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 backdrop-blur-sm">
+            <span className={`inline-block h-2 w-2 rounded-full ${statusConfig.dot} ${callStatus === CALL_STATUS.CONNECTING ? "animate-pulse" : ""}`} />
+            <span className="text-xs font-medium text-white/90">{statusConfig.label}</span>
+          </div>
+        )}
         {/* Remote Video (Main) */}
         <div className="absolute inset-0">
           {/* Always render the video container so the ref is immediately available */}
@@ -413,7 +435,7 @@ export default function VideoConsultation({ appointmentId, onLeave, userRole = "
       </div>
 
       {/* Chat Side Panel */}
-      {chatOpen && (
+      {!compact && chatOpen && (
         <div className="w-80 shrink-0 flex flex-col border-l border-gray-700">
           <ChatPanel
             appointmentId={appointmentId}

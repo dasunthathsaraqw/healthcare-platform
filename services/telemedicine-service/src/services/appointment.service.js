@@ -65,8 +65,78 @@ const buildDynamicMock = (appointmentId) => ({
   _isMock:       true, // flag so callers can detect mock data in logs/tests
 });
 
+/**
+ * Load a real appointment using the same Bearer token the browser sends to the gateway.
+ * Fixes: mock doctorId/patientId never matched real JWT user ids → join forbidden / no media.
+ */
+const fetchRemoteAppointment = async (appointmentId, authHeader) => {
+  const base = (process.env.APPOINTMENT_SERVICE_URL || "").replace(/\/+$/, "");
+  if (!base || !authHeader) {
+    return { outcome: "skip" };
+  }
+
+  const url = `${base}/api/appointments/${encodeURIComponent(appointmentId)}`;
+  try {
+    const res = await axios.get(url, {
+      headers: { Authorization: authHeader },
+      timeout: 8000,
+      validateStatus: () => true,
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      return {
+        outcome: "error",
+        statusCode: res.status,
+        message: "Could not authorize appointment lookup. Please sign in again.",
+      };
+    }
+    if (res.status === 404) {
+      return { outcome: "error", statusCode: 404, message: "Appointment not found." };
+    }
+    if (res.status !== 200 || !res.data?.appointment) {
+      return {
+        outcome: "error",
+        statusCode: 502,
+        message: "Unexpected response from appointment service.",
+      };
+    }
+
+    const a = res.data.appointment;
+    const st = (a.status || "").toLowerCase();
+    if (st !== "confirmed") {
+      return {
+        outcome: "error",
+        statusCode: 422,
+        message: "Only confirmed appointments can join video.",
+      };
+    }
+
+    const dt = a.dateTime || a.scheduledAt;
+    return {
+      outcome: "ok",
+      appointment: {
+        appointmentId: String(a._id || appointmentId),
+        doctorId: String(a.doctorId),
+        patientId: String(a.patientId),
+        doctorName: a.doctorName || "",
+        patientName: a.patientName || "",
+        specialty: a.specialty || "",
+        status: "CONFIRMED",
+        scheduledAt: dt ? new Date(dt) : new Date(),
+        consultationFee: a.consultationFee || 0,
+      },
+    };
+  } catch (err) {
+    console.warn(
+      `[AppointmentService] Remote appointment fetch failed (${appointmentId}):`,
+      err.message
+    );
+    return { outcome: "unreachable" };
+  }
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
-// getAppointmentById(appointmentId)
+// getAppointmentById(appointmentId, opts?)
 //
 // Returns appointment details needed to create a telemedicine session:
 //   { appointmentId, doctorId, patientId, doctorName, patientName,
@@ -75,7 +145,32 @@ const buildDynamicMock = (appointmentId) => ({
 // Throws an error (with statusCode) if appointment is not found or not
 // in a CONFIRMED state.
 // ─────────────────────────────────────────────────────────────────────────────
-const getAppointmentById = async (appointmentId) => {
+const getAppointmentById = async (appointmentId, opts = {}) => {
+  const authHeader = opts.authHeader;
+
+  if (authHeader) {
+    const remote = await fetchRemoteAppointment(appointmentId, authHeader);
+    if (remote.outcome === "ok") {
+      console.log(
+        `[AppointmentService] 🔵 REAL (via gateway token): appointment ${appointmentId}`
+      );
+      return remote.appointment;
+    }
+    if (remote.outcome === "error") {
+      const err = new Error(remote.message);
+      err.statusCode = remote.statusCode;
+      throw err;
+    }
+    if (remote.outcome === "unreachable") {
+      const err = new Error(
+        "Telemedicine could not reach appointment-service. " +
+          "Set APPOINTMENT_SERVICE_URL (e.g. http://localhost:3003) and start appointment-service."
+      );
+      err.statusCode = 503;
+      throw err;
+    }
+  }
+
   // ── MOCK BLOCK ─────────────────────────────────────────────────────────────
   // TODO: Remove this block when appointment-service is ready.
   // ──────────────────────────────────────────────────────────────────────────
