@@ -11,8 +11,8 @@ const { lockSlot, unlockSlot, isSlotLocked } = require("../utils/slotLocker");
  * In production this would integrate with a Jitsi / Daily.co / Zoom API.
  */
 const generateMeetingLink = (appointmentId) => {
-  const room = `healthcare-${appointmentId}-${Math.random().toString(36).slice(2, 9)}`;
-  return `https://meet.jit.si/${room}`;
+  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  return `${baseUrl}/dashboard/consultation/${appointmentId}`;
 };
 
 /**
@@ -40,6 +40,8 @@ const handleError = (res, error, fallbackMessage = "Internal server error") => {
 
 // ─── NEW: Reserve a slot (creates temporary hold, NOT an appointment) ───
 // POST /api/appointments/reserve
+// ─── NEW: Reserve a slot (creates temporary hold, NOT an appointment) ───
+// POST /api/appointments/reserve
 const reserveSlot = async (req, res) => {
   try {
     const {
@@ -51,10 +53,21 @@ const reserveSlot = async (req, res) => {
       consultationFee,
       isForSomeoneElse,
       bookedFor,
+      availabilityId,  // ← NEW: Which availability slot
+      slotTime,        // ← NEW: Specific time (e.g., "09:30")
+      patientNumber,   // ← NEW: Position in queue (1, 2, 3...)
     } = req.body;
 
     const patientId = req.body.patientId || req.user.id;
     const patientName = req.body.patientName || req.user.name || "Patient";
+
+    console.log("📝 Reserve slot request:", {
+      doctorId,
+      dateTime,
+      availabilityId,
+      slotTime,
+      patientNumber,
+    });
 
     if (!doctorId || !dateTime) {
       return res.status(400).json({
@@ -75,7 +88,7 @@ const reserveSlot = async (req, res) => {
     const existingAppointment = await Appointment.findOne({
       doctorId,
       dateTime: apptDateTime,
-      status: { $in: ["confirmed", "completed"] }, // Only confirmed/completed count
+      status: { $in: ["confirmed", "completed"] },
     });
 
     if (existingAppointment) {
@@ -105,9 +118,7 @@ const reserveSlot = async (req, res) => {
       });
     }
 
-    // Store reservation data temporarily (in memory or Redis)
-    // For this example, we'll return the reservation data to the frontend
-    // The frontend will pass this to payment service
+    // Store reservation data with availability info
     const reservationData = {
       reservationId,
       doctorId,
@@ -120,10 +131,13 @@ const reserveSlot = async (req, res) => {
       consultationFee,
       isForSomeoneElse,
       bookedFor,
+      availabilityId,  // ← NEW
+      slotTime,        // ← NEW
+      patientNumber,   // ← NEW
       expiresAt: Date.now() + 10 * 60 * 1000,
     };
 
-    // Store in a temporary map (could use Redis)
+    // Store in a temporary map
     if (!global.reservations) global.reservations = new Map();
     global.reservations.set(reservationId, reservationData);
     
@@ -137,6 +151,9 @@ const reserveSlot = async (req, res) => {
     }, 10 * 60 * 1000);
 
     console.log(`🔒 Slot reserved: ${reservationId} for doctor ${doctorId} at ${apptDateTime}`);
+    console.log(`   - Availability ID: ${availabilityId}`);
+    console.log(`   - Slot Time: ${slotTime}`);
+    console.log(`   - Patient Number: ${patientNumber}`);
 
     return res.status(200).json({
       success: true,
@@ -153,6 +170,7 @@ const reserveSlot = async (req, res) => {
 
 // ─── NEW: Create appointment AFTER successful payment ───
 // POST /api/appointments/create-from-reservation
+// ─── NEW: Create appointment AFTER successful payment ───
 const createAppointmentFromReservation = async (req, res) => {
   try {
     const { reservationId, paymentId } = req.body;
@@ -181,7 +199,6 @@ const createAppointmentFromReservation = async (req, res) => {
     });
 
     if (existingAppointment) {
-      // Release the lock
       unlockSlot(reservation.doctorId, reservation.dateTime, reservationId);
       global.reservations.delete(reservationId);
       return res.status(409).json({
@@ -191,17 +208,21 @@ const createAppointmentFromReservation = async (req, res) => {
     }
 
     // Calculate patient number
-    const startOfDay = new Date(reservation.dateTime);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(reservation.dateTime);
-    endOfDay.setHours(23, 59, 59, 999);
+    let patientNumber = reservation.patientNumber;
+    
+    if (!patientNumber) {
+      const startOfDay = new Date(reservation.dateTime);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(reservation.dateTime);
+      endOfDay.setHours(23, 59, 59, 999);
 
-    const dailyCount = await Appointment.countDocuments({
-      doctorId: reservation.doctorId,
-      dateTime: { $gte: startOfDay, $lte: endOfDay },
-      status: "confirmed",
-    });
-    const patientNumber = dailyCount + 1;
+      const dailyCount = await Appointment.countDocuments({
+        doctorId: reservation.doctorId,
+        dateTime: { $gte: startOfDay, $lte: endOfDay },
+        status: "confirmed",
+      });
+      patientNumber = dailyCount + 1;
+    }
 
     // Create the actual appointment
     const appointment = new Appointment({
@@ -220,9 +241,55 @@ const createAppointmentFromReservation = async (req, res) => {
       isForSomeoneElse: reservation.isForSomeoneElse,
       bookedFor: reservation.bookedFor || { name: "", age: null, phone: "", email: "" },
       patientNumber,
+      availabilityId: reservation.availabilityId,
+      slotTime: reservation.slotTime,
+      slotPosition: reservation.patientNumber,
     });
 
     await appointment.save();
+
+    // ✅ Increment bookedSlots by calling doctor service's update endpoint
+    // ✅ Increment bookedSlots by calling doctor service's update endpoint
+if (reservation.availabilityId) {
+  try {
+    const axios = require("axios");
+    const DOCTOR_SERVICE_URL = process.env.DOCTOR_SERVICE_URL || "http://localhost:3002";
+    
+    // Get the current availability to get totalSlots and current bookedSlots
+    const getResponse = await axios.get(
+      `${DOCTOR_SERVICE_URL}/api/doctors/availability`,
+      {
+        headers: { Authorization: req.headers.authorization }
+      }
+    );
+    
+    // Find the specific availability
+    const availabilityList = getResponse.data.availability || [];
+    const currentAvailability = availabilityList.find(a => a._id === reservation.availabilityId);
+    
+    if (currentAvailability) {
+      const newBookedSlots = (currentAvailability.bookedSlots || 0) + 1;
+      
+      // Update the availability with new bookedSlots
+      await axios.put(
+        `${DOCTOR_SERVICE_URL}/api/doctors/availability/${reservation.availabilityId}`,
+        { bookedSlots: newBookedSlots },
+        { 
+          headers: { 
+            Authorization: req.headers.authorization,
+            "Content-Type": "application/json"
+          } 
+        }
+      );
+      console.log(`✅ Updated bookedSlots for availability ${reservation.availabilityId} to ${newBookedSlots}/${currentAvailability.totalSlots}`);
+    } else {
+      console.warn(`⚠️ Availability ${reservation.availabilityId} not found`);
+    }
+  } catch (err) {
+    console.error(`⚠️ Failed to update bookedSlots:`, err.response?.data || err.message);
+    // Don't fail the appointment creation - log error but continue
+  }
+}
 
     // Release the lock and clean up reservation
     unlockSlot(reservation.doctorId, reservation.dateTime, reservationId);
@@ -335,13 +402,13 @@ const createAppointmentFromReservation = async (req, res) => {
       dateTime: apptDateTime,
       reason: reason || "",
       consultationFee: consultationFee || 0,
-      status: hasFee ? "pending" : "confirmed",  // pending = awaiting payment
-      paymentStatus: hasFee ? "unpaid" : "paid", // unpaid = not paid yet
-      meetingLink: hasFee ? "" : generateMeetingLink(`${patientId}-${Date.now()}`),
+      status: "confirmed", // Auto-confirm
+      paymentStatus: "paid", // Auto-mark as paid
       isForSomeoneElse: !!isForSomeoneElse,
       bookedFor: bookedFor || { name: "", age: null, phone: "", email: "" },
       patientNumber,
     });
+    appointment.meetingLink = generateMeetingLink(appointment._id.toString());
 
     await appointment.save();
 
@@ -466,6 +533,15 @@ const getAppointmentsByDoctor = async (req, res) => {
 
     if (req.query.status) filter.status = req.query.status;
 
+    // ← ADD THIS: filter by date if provided
+    if (req.query.date) {
+      const startOfDay = new Date(req.query.date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(req.query.date);
+      endOfDay.setHours(23, 59, 59, 999);
+      filter.dateTime = { $gte: startOfDay, $lte: endOfDay };
+    }
+
     const appointments = await Appointment.find(filter).sort({ dateTime: -1 });
 
     return res.status(200).json({
@@ -477,7 +553,6 @@ const getAppointmentsByDoctor = async (req, res) => {
     return handleError(res, error, "Failed to fetch doctor appointments");
   }
 };
-
 // ─────────────────────────────────────────────────────────────────────────────
 // READ — Doctor Stats (used by doctor-service getDashboardStats)
 // GET /api/appointments/doctor/:id/stats
