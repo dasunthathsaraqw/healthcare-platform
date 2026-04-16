@@ -178,18 +178,20 @@ export default function PrivacyPage() {
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Current Password</label>
                 <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                  placeholder="Enter current password"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">New Password</label>
                 <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)}
                   placeholder="Min. 6 characters"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Confirm New Password</label>
                 <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                  placeholder="Re-enter new password"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
               </div>
 
               {pwError && <p className="text-xs text-red-500 font-medium">{pwError}</p>}
