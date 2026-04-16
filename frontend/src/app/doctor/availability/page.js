@@ -8,13 +8,13 @@ const API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUB
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DAYS = [
-  { label: "Monday",    short: "Mon", dow: 1 },
-  { label: "Tuesday",   short: "Tue", dow: 2 },
+  { label: "Monday", short: "Mon", dow: 1 },
+  { label: "Tuesday", short: "Tue", dow: 2 },
   { label: "Wednesday", short: "Wed", dow: 3 },
-  { label: "Thursday",  short: "Thu", dow: 4 },
-  { label: "Friday",    short: "Fri", dow: 5 },
-  { label: "Saturday",  short: "Sat", dow: 6 },
-  { label: "Sunday",    short: "Sun", dow: 0 },
+  { label: "Thursday", short: "Thu", dow: 4 },
+  { label: "Friday", short: "Fri", dow: 5 },
+  { label: "Saturday", short: "Sat", dow: 6 },
+  { label: "Sunday", short: "Sun", dow: 0 },
 ];
 
 const DURATIONS = [15, 30, 45, 60];
@@ -62,8 +62,8 @@ function Toast({ toasts, removeToast }) {
             ${t.type === "success"
               ? "bg-green-600 text-white"
               : t.type === "error"
-              ? "bg-red-600 text-white"
-              : "bg-gray-800 text-white"
+                ? "bg-red-600 text-white"
+                : "bg-gray-800 text-white"
             }`}
         >
           {t.type === "success" && (
@@ -174,7 +174,7 @@ function SlotModal({ open, onClose, onSave, editSlot, saving }) {
           <div className="flex rounded-xl overflow-hidden border border-gray-200 p-1 gap-1 bg-gray-50">
             {[
               { id: "recurring", label: "Recurring Weekly" },
-              { id: "specific",  label: "Specific Date" },
+              { id: "specific", label: "Specific Date" },
             ].map((m) => (
               <button
                 key={m.id}
@@ -415,8 +415,8 @@ function SlotCard({ slot, onEdit, onDelete }) {
         ${isBooked
           ? "bg-gray-50 border-gray-200 hover:border-gray-300"
           : isUnavailable
-          ? "bg-orange-50 border-orange-200"
-          : "bg-green-50 border-green-200 hover:border-green-400"
+            ? "bg-orange-50 border-orange-200"
+            : "bg-green-50 border-green-200 hover:border-green-400"
         }`}
       onClick={() => !isBooked && onEdit(slot)}
     >
@@ -433,14 +433,21 @@ function SlotCard({ slot, onEdit, onDelete }) {
       {/* Status badge */}
       <div className="flex items-center justify-between mt-2">
         <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md
-          ${isBooked
+    ${isBooked
             ? "bg-gray-200 text-gray-500"
             : isUnavailable
-            ? "bg-orange-100 text-orange-600"
-            : "bg-green-100 text-green-600"
+              ? "bg-orange-100 text-orange-600"
+              : "bg-green-100 text-green-600"
           }`}>
           {isBooked ? "Booked" : isUnavailable ? "Unavailable" : "Available"}
         </span>
+
+        {/* Add slot count display */}
+        {slot.totalSlots > 0 && (
+          <span className="text-[9px] text-gray-400">
+            {slot.bookedSlots || 0}/{slot.totalSlots} slots
+          </span>
+        )}
 
         {/* Delete button */}
         {!isBooked && (
@@ -583,9 +590,9 @@ export default function AvailabilityPage() {
     return acc;
   }, {});
 
-  const totalSlots  = slots.length;
+  const totalSlots = slots.length;
   const bookedSlots = slots.filter((s) => s.isBooked || s.status === "booked").length;
-  const freeSlots   = totalSlots - bookedSlots;
+  const freeSlots = totalSlots - bookedSlots;
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -633,9 +640,9 @@ export default function AvailabilityPage() {
         {/* Summary bar */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: "Total Slots",     value: totalSlots,  color: "blue"  },
-            { label: "Available",       value: freeSlots,   color: "green" },
-            { label: "Booked",          value: bookedSlots, color: "gray"  },
+            { label: "Total Slots", value: totalSlots, color: "blue" },
+            { label: "Available", value: freeSlots, color: "green" },
+            { label: "Booked", value: bookedSlots, color: "gray" },
           ].map((s) => (
             <div
               key={s.label}
@@ -760,10 +767,10 @@ export default function AvailabilityPage() {
                     <div className="flex items-center gap-4">
                       <div className="text-center w-16">
                         <p className="text-xs font-bold text-gray-900">
-                          {new Date(slot.specificDate).toLocaleDateString("en-US", { month:"short", day:"numeric" })}
+                          {new Date(slot.specificDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </p>
                         <p className="text-[10px] text-gray-400">
-                          {new Date(slot.specificDate).toLocaleDateString("en-US", { weekday:"short" })}
+                          {new Date(slot.specificDate).toLocaleDateString("en-US", { weekday: "short" })}
                         </p>
                       </div>
                       <div>

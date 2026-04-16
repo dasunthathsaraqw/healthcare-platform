@@ -279,16 +279,16 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-[scaleIn_.2s_ease-out]">
 
         {/* Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-500 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-          </div>
-          <div>
-            <p className="text-white font-bold text-base">Booking Confirmed!</p>
-            <p className="text-green-100 text-xs">Review your appointment details below</p>
-          </div>
+        <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-500 flex items-center gap-3">
+  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+  </div>
+  <div>
+    <p className="text-white font-bold text-base">Complete Payment</p>
+    <p className="text-blue-100 text-xs">Your appointment will be confirmed after payment</p>
+     </div>
           {!paying && (
             <button onClick={onClose} className="ml-auto p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
@@ -790,127 +790,137 @@ export default function DoctorsPage() {
   useEffect(() => { handleSearch(); }, []); // eslint-disable-line
 
   // ── Step 1: Book appointment (create record in DB) ──────────────────────────
-  const handleBookConfirm = async ({ reason, isForOthers, guestInfo }) => {
-    const { doctor, slot, date } = bookingData;
-    setBooking(true);
-    try {
-      const resp = await axios.post(`${API_BASE}/appointments`, {
-        doctorId:         doctor._id,
-        doctorName:       doctor.name,
-        specialty:        doctor.specialty,
-        consultationFee:  doctor.consultationFee,
-        availabilityId:   slot._id,
-        dateTime:         `${date}T${slot.startTime}:00`,
-        reason,
-        type:             "in-person",
-        isForSomeoneElse: isForOthers,
-        bookedFor: {
-          name:  guestInfo.name,
-          age:   guestInfo.age,
-          email: guestInfo.email,
+// ── Step 1: Reserve slot (create temporary hold) ──────────────────────────
+const handleBookConfirm = async ({ reason, isForOthers, guestInfo }) => {
+  const { doctor, slot, date } = bookingData;
+  setBooking(true);
+  try {
+    // Reserve the slot first (no appointment created yet)
+    const resp = await axios.post(`${API_BASE}/appointments/reserve`, {
+      doctorId: doctor._id,
+      doctorName: doctor.name,
+      specialty: doctor.specialty,
+      dateTime: `${date}T${slot.startTime}:00`,
+      reason,
+      consultationFee: doctor.consultationFee,
+      isForSomeoneElse: isForOthers,
+      bookedFor: {
+        name: guestInfo.name,
+        age: guestInfo.age,
+        email: guestInfo.email,
+      },
+    }, { headers: authHeaders() });
+
+    const { reservationId, reservationData } = resp.data;
+    const hasFee = doctor.consultationFee > 0;
+
+    setBookingData(null);
+
+    if (hasFee) {
+      // Store reservation ID to use during payment
+      setSummaryData({
+        doctor,
+        slot,
+        date,
+        reservationId,  // ← Make sure this is included
+        reservationData,
+        bookingInfo: {
+          isForSomeoneElse: isForOthers,
+          bookedFor: { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email },
         },
+      });
+      addToast("Slot reserved! Please complete payment within 10 minutes.", "info");
+    } else {
+      // Free appointment - create directly
+      const createResp = await axios.post(`${API_BASE}/appointments/create-from-reservation`, {
+        reservationId,
+        paymentId: "free_appointment",
       }, { headers: authHeaders() });
-
-      const appointmentId = resp.data?.appointment?._id;
-      const hasFee        = doctor.consultationFee > 0;
-
-      setBookingData(null); // close booking modal
-
-      if (hasFee) {
-        // Show payment summary modal
-        setSummaryData({
-          doctor,
-          slot,
-          date,
-          appointmentId,
-          bookingInfo: {
-            isForSomeoneElse: isForOthers,
-            bookedFor: { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email },
-          },
-        });
-        addToast("Appointment confirmed! Please complete payment.", "success");
-      } else {
-        // Free — show success directly
-        setSuccessData({ doctor, slot, date });
-        addToast("Appointment booked successfully!", "success");
-      }
-    } catch (err) {
-      addToast(err.response?.data?.message || "Booking failed. Please try again.", "error");
-    } finally {
-      setBooking(false);
+      
+      setSuccessData({ doctor, slot, date });
+      addToast("Appointment booked successfully!", "success");
+      setTimeout(() => router.push("/dashboard/appointments"), 3000);
     }
-  };
+  } catch (err) {
+    console.error("Booking error:", err);
+    addToast(err.response?.data?.message || "Booking failed. Please try again.", "error");
+  } finally {
+    setBooking(false);
+  }
+};
 
   // ── Step 2: Pay via PayHere ─────────────────────────────────────────────────
-  const handleProceedToPayment = async () => {
-    if (!summaryData) return;
-    setPaying(true);
-    try {
-      const { doctor, appointmentId, bookingInfo } = summaryData;
+// ── Step 2: Pay via PayHere ─────────────────────────────────────────────────
+const handleProceedToPayment = async () => {
+  if (!summaryData) return;
+  setPaying(true);
+  try {
+    const { doctor, reservationId, bookingInfo } = summaryData;  // ← Get reservationId from summaryData
 
-      const { data } = await axios.post(
-        `${API_BASE}/payments/initiate`,
-        {
-          appointmentId,
-          amount:       doctor.consultationFee,
-          patientName:  bookingInfo.isForSomeoneElse
-            ? bookingInfo.bookedFor?.name
-            : undefined,
-          patientEmail: bookingInfo.isForSomeoneElse
-            ? bookingInfo.bookedFor?.email
-            : undefined,
-        },
-        { headers: authHeaders() }
-      );
-      // After getting data from API, before form submission
-console.log("🔍 Full paymentData being sent:", JSON.stringify(data.paymentData, null, 2));
+    const { data } = await axios.post(
+      `${API_BASE}/payments/initiate`,
+      {
+        appointmentId: reservationId,  // ← Use reservationId as appointmentId
+        amount: doctor.consultationFee,
+        patientName: bookingInfo.isForSomeoneElse
+          ? bookingInfo.bookedFor?.name
+          : undefined,
+        patientEmail: bookingInfo.isForSomeoneElse
+          ? bookingInfo.bookedFor?.email
+          : undefined,
+        reservationId,  // ← Pass reservationId separately
+      },
+      { headers: authHeaders() }
+    );
+    
+    console.log("🔍 Full paymentData being sent:", JSON.stringify(data.paymentData, null, 2));
 
-// Verify all required fields are present
-const required = ['merchant_id', 'order_id', 'amount', 'currency', 'hash', 'return_url', 'notify_url'];
-required.forEach(field => {
-  if (!data.paymentData[field]) {
-    console.error(`❌ MISSING REQUIRED FIELD: ${field}`);
-  } else {
-    console.log(`✅ ${field}: ${data.paymentData[field]}`);
-  }
-});
-
-      if (data.success && data.checkoutUrl && data.paymentData) {
-        // Save orderId so payment-status page can poll even without URL params
-        if (typeof window !== "undefined") {
-          localStorage.setItem("lastPayhereOrderId", data.orderId);
-        }
-
-        // Build hidden form and submit to PayHere — exactly like Java reference
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = data.checkoutUrl;
-        form.style.display = "none";
-
-        Object.keys(data.paymentData).forEach((key) => {
-          if (data.paymentData[key] !== null && data.paymentData[key] !== undefined) {
-            const input = document.createElement("input");
-            input.type  = "hidden";
-            input.name  = key;
-            input.value = data.paymentData[key];
-            form.appendChild(input);
-          }
-        });
-
-        document.body.appendChild(form);
-        console.log("🚀 Submitting to PayHere:", data.checkoutUrl);
-        form.submit(); // Browser redirects to PayHere sandbox/production
+    // Verify all required fields are present
+    const required = ['merchant_id', 'order_id', 'amount', 'currency', 'hash', 'return_url', 'notify_url'];
+    required.forEach(field => {
+      if (!data.paymentData[field]) {
+        console.error(`❌ MISSING REQUIRED FIELD: ${field}`);
       } else {
-        throw new Error("Invalid payment response from server");
+        console.log(`✅ ${field}: ${data.paymentData[field]}`);
       }
-    } catch (err) {
-      console.error("Payment error:", err);
-      addToast(err.response?.data?.message || "Payment failed. Please try again.", "error");
-      setPaying(false);
+    });
+
+    if (data.success && data.checkoutUrl && data.paymentData) {
+      // Save orderId so payment-status page can poll even without URL params
+      if (typeof window !== "undefined") {
+        localStorage.setItem("lastPayhereOrderId", data.orderId);
+        // Also store reservationId for recovery
+        localStorage.setItem("lastReservationId", reservationId);
+      }
+
+      // Build hidden form and submit to PayHere
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = data.checkoutUrl;
+      form.style.display = "none";
+
+      Object.keys(data.paymentData).forEach((key) => {
+        if (data.paymentData[key] !== null && data.paymentData[key] !== undefined) {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = key;
+          input.value = data.paymentData[key];
+          form.appendChild(input);
+        }
+      });
+
+      document.body.appendChild(form);
+      console.log("🚀 Submitting to PayHere:", data.checkoutUrl);
+      form.submit();
+    } else {
+      throw new Error("Invalid payment response from server");
     }
-    // Note: setPaying(false) intentionally NOT called on success
-    // because the browser will navigate away to PayHere
-  };
+  } catch (err) {
+    console.error("Payment error:", err);
+    addToast(err.response?.data?.message || "Payment failed. Please try again.", "error");
+    setPaying(false);
+  }
+};
 
   const handleOpenBook = (doctor, slot, date) => {
     setProfileDoc(null);

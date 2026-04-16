@@ -13,6 +13,8 @@ const {
   updateAppointmentStatus,
   cancelAppointment,
   updateAppointmentPayment,
+  reserveSlot,
+  createAppointmentFromReservation,
 } = require("../controllers/appointmentController");
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,9 +50,10 @@ router.get("/patient/:id", authenticate, getAppointmentsByPatient);
 // SHARED CRUD ROUTES
 // ─────────────────────────────────────────────────────────────────────────────
 
-// POST /api/appointments                   ← Book appointment + publish RabbitMQ event
-router.post("/", authenticate, bookAppointment);
-
+// Replace the POST route
+router.post("/reserve", authenticate, reserveSlot);
+router.post("/create-from-reservation", authenticate, createAppointmentFromReservation);
+// Remove: router.post("/", authenticate, bookAppointment);
 // PATCH /api/appointments/:id/status       ← Doctor accept / reject / complete
 router.patch("/:id/status", authenticate, updateAppointmentStatus);
 

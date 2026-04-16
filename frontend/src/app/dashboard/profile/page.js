@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import axios from "axios";
+import api from "@/services/api";
 import toast, { Toaster } from "react-hot-toast";
 
 // ─── Skeleton Components ──────────────────────────────────────────────────────
@@ -165,12 +165,7 @@ export default function ProfilePage() {
     setIsUpdating(true);
     const loadingToast = toast.loading("Saving medical history...");
     try {
-      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-      await axios.put(
-        `${process.env.NEXT_PUBLIC_API_URL}/patients/history`,
-        { conditions: medicalHistory },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.put("/patients/history", { conditions: medicalHistory });
       toast.dismiss(loadingToast);
       toast.success("Medical history saved successfully! 🏥", { duration: 4000 });
     } catch (error) {

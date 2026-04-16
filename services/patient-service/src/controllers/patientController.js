@@ -47,15 +47,25 @@ exports.uploadMedicalReport = async (req, res) => {
     });
 
     // Fire-and-forget RabbitMQ event — notification failure must not block the response
-    publishNotificationEvent('REPORT_UPLOADED', {
-      patientId: req.user._id.toString(),
-      patientName: req.user.name,
-      patientEmail: req.user.email,
-      reportTitle: title.trim(),
-      documentType: documentType || 'General',
-    }).catch((err) =>
-      console.warn('Non-critical: Failed to publish REPORT_UPLOADED event:', err.message)
-    );
+    try {
+      void publishNotificationEvent('REPORT_UPLOADED', {
+        patientId: req.user._id.toString(),
+        patientName: req.user.name,
+        patientEmail: req.user.email,
+        reportTitle: title.trim(),
+        documentType: documentType || 'General',
+      }).catch((err) => {
+        console.warn(
+          'Non-critical: Failed to publish REPORT_UPLOADED event:',
+          err.message
+        );
+      });
+    } catch (publishError) {
+      console.warn(
+        'Non-critical: Synchronous RabbitMQ publish error:',
+        publishError.message
+      );
+    }
 
     return res.status(201).json({
       success: true,

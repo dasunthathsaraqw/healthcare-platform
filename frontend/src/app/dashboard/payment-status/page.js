@@ -50,7 +50,7 @@ function PaymentStatusContent() {
           setStatus("success");
           setMessage("Payment successful! Your appointment has been confirmed.");
           localStorage.removeItem("lastPayhereOrderId");
-          setTimeout(() => router.push("/appointments"), 4000);
+          setTimeout(() => router.push("/dashboard/appointments"), 4000);
         } else if (data.status === "failed" || data.status === "cancelled") {
           setStatus("failed");
           setMessage("Payment was not completed. Your appointment slot has been released.");
