@@ -32,7 +32,7 @@ const generateTimeSlots = (startTime, endTime, slotDuration) => {
   const startMinutes = timeToMinutes(startTime);
   const endMinutes = timeToMinutes(endTime);
   const duration = slotDuration || 30;
-  
+
   for (let minutes = startMinutes; minutes < endMinutes; minutes += duration) {
     slots.push(minutesToTime(minutes));
   }
@@ -302,11 +302,7 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
         <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-500 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-<<<<<<< HEAD
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-=======
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
->>>>>>> c575229fd264984ad7eb080824792207e08e788a
             </svg>
           </div>
           <div>
@@ -336,11 +332,7 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
               ["Date", formattedDate],
               ["Time", slot.startTime],
               ["Duration", `${slot.slotDuration || 30} min`],
-<<<<<<< HEAD
-              ["Appt ID", appointmentId ? `#${appointmentId.toString().slice(-6).toUpperCase()}` : "—"],
-=======
               ["Reservation ID", reservationId ? `#${reservationId.slice(-8).toUpperCase()}` : "—"],
->>>>>>> c575229fd264984ad7eb080824792207e08e788a
             ].map(([label, val]) => (
               <div key={label} className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3">
                 <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-0.5">{label}</p>
@@ -491,52 +483,52 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
   const [loadSlots, setLoadSlots] = useState(false);
   const [selSlot, setSelSlot] = useState(null);
 
-const fetchSlots = useCallback(async (d) => {
-  if (!doctor || !d) return;
-  setLoadSlots(true);
-  setSelSlot(null);
-  try {
-    // Fetch availability slots
-    const { data } = await axios.get(
-      `${API_BASE}/doctors/${doctor._id}/availability?date=${d}`,
-      { headers: authHeaders() }
-    );
-    const rawSlots = data.availability || data || [];
-
-    // Fetch booked appointments for this doctor on this date
-    // to know EXACTLY which time slots are taken
-    let bookedTimes = [];
+  const fetchSlots = useCallback(async (d) => {
+    if (!doctor || !d) return;
+    setLoadSlots(true);
+    setSelSlot(null);
     try {
-      const apptRes = await axios.get(
-        `${API_BASE}/appointments/doctor/${doctor._id}?date=${d}`,
+      // Fetch availability slots
+      const { data } = await axios.get(
+        `${API_BASE}/doctors/${doctor._id}/availability?date=${d}`,
         { headers: authHeaders() }
       );
-      const appts = apptRes.data.appointments || [];
-      // Extract the time portion from each booked appointment's dateTime
-      bookedTimes = appts
-        .filter(a => ["confirmed", "pending"].includes(a.status))
-        .map(a => {
-          const dt = new Date(a.dateTime);
-          return `${dt.getHours().toString().padStart(2, "0")}:${dt.getMinutes().toString().padStart(2, "0")}`;
-        });
+      const rawSlots = data.availability || data || [];
+
+      // Fetch booked appointments for this doctor on this date
+      // to know EXACTLY which time slots are taken
+      let bookedTimes = [];
+      try {
+        const apptRes = await axios.get(
+          `${API_BASE}/appointments/doctor/${doctor._id}?date=${d}`,
+          { headers: authHeaders() }
+        );
+        const appts = apptRes.data.appointments || [];
+        // Extract the time portion from each booked appointment's dateTime
+        bookedTimes = appts
+          .filter(a => ["confirmed", "pending"].includes(a.status))
+          .map(a => {
+            const dt = new Date(a.dateTime);
+            return `${dt.getHours().toString().padStart(2, "0")}:${dt.getMinutes().toString().padStart(2, "0")}`;
+          });
+      } catch {
+        // If this endpoint doesn't support date filter, fall back to bookedSlots count
+        console.log("Could not fetch booked times, using count fallback");
+      }
+
+      // Attach bookedTimes to each slot
+      const enrichedSlots = rawSlots.map(slot => ({
+        ...slot,
+        bookedTimes, // attach actual booked times
+      }));
+
+      setSlots(enrichedSlots);
     } catch {
-      // If this endpoint doesn't support date filter, fall back to bookedSlots count
-      console.log("Could not fetch booked times, using count fallback");
+      setSlots([]);
+    } finally {
+      setLoadSlots(false);
     }
-
-    // Attach bookedTimes to each slot
-    const enrichedSlots = rawSlots.map(slot => ({
-      ...slot,
-      bookedTimes, // attach actual booked times
-    }));
-
-    setSlots(enrichedSlots);
-  } catch {
-    setSlots([]);
-  } finally {
-    setLoadSlots(false);
-  }
-}, [doctor]);
+  }, [doctor]);
 
   const handleDateChange = (d) => { setDate(d); fetchSlots(d); };
 
@@ -636,14 +628,22 @@ const fetchSlots = useCallback(async (d) => {
                   className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700
                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition" />
               </div>
-<<<<<<< HEAD
               {date && (
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Available Slots</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                    Available Slots
+                  </p>
                   {loadSlots ? (
-                    <div className="grid grid-cols-3 gap-2">
-                      {[1, 2, 3, 4, 5, 6].map((i) => (
-                        <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />
+                    <div className="space-y-3">
+                      {[1, 2].map((i) => (
+                        <div key={i} className="border border-gray-100 rounded-xl p-3 animate-pulse">
+                          <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
+                          <div className="grid grid-cols-3 gap-2">
+                            {[1, 2, 3].map((j) => (
+                              <div key={j} className="h-10 bg-gray-100 rounded-xl" />
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   ) : slots.length === 0 ? (
@@ -653,31 +653,103 @@ const fetchSlots = useCallback(async (d) => {
                       <p className="text-xs text-gray-400">Try another date</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-2">
-                      {slots
-                        .filter((s) => s.status !== "booked" && !s.isBooked)
-                        .map((slot, idx) => (
-                          <button key={slot._id}
-                            onClick={() => setSelSlot(selSlot?._id === slot._id ? null : slot)}
-                            className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all flex flex-col items-center
-                              ${selSlot?._id === slot._id
-                                ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
-                                : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600"
-                              }`}>
-                            <span>{slot.startTime}</span>
-                            <span className={`text-[8px] uppercase ${selSlot?._id === slot._id ? "text-blue-100" : "text-gray-400"}`}>
-                              Patient No. {idx + 1}
-                            </span>
-                          </button>
-                        ))
-                      }
-                      {slots.filter((s) => s.status === "booked" || s.isBooked).map((slot) => (
-                        <button key={slot._id} disabled
-                          className="py-2 px-1 rounded-xl text-xs font-medium border border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed">
-                          {slot.startTime}
-                          <span className="block text-[9px]">Booked</span>
-                        </button>
-                      ))}
+                    <div className="space-y-4">
+                      {slots.map((slot) => {
+                        const timeSlots = generateTimeSlots(
+                          slot.startTime,
+                          slot.endTime,
+                          slot.slotDuration || 30
+                        );
+
+                        // bookedTimes comes from the API — array of booked time strings
+                        // e.g. ["09:00", "10:30"]
+                        const bookedTimes = slot.bookedTimes || [];
+
+                        // fallback: if bookedTimes not available, use count-based
+                        const bookedCount = slot.bookedSlots || 0;
+                        const useCountFallback = bookedTimes.length === 0 && bookedCount > 0;
+
+                        return (
+                          <div
+                            key={slot._id}
+                            className="border border-gray-100 rounded-xl p-3 transition-all"
+                          >
+                            <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
+                              <span className="text-xs font-semibold text-gray-700">
+                                {slot.startTime} – {slot.endTime} ({slot.slotDuration || 30} min)
+                              </span>
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full ${(slot.totalSlots || timeSlots.length) - bookedCount > 0
+                                  ? "bg-green-100 text-green-600"
+                                  : "bg-red-100 text-red-500"
+                                  }`}
+                              >
+                                {Math.max(0, (slot.totalSlots || timeSlots.length) - bookedCount)}/
+                                {slot.totalSlots || timeSlots.length} available
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                              {timeSlots.map((time, idx) => {
+                                // Check if this specific time is booked
+                                let isBooked;
+                                if (bookedTimes.length > 0) {
+                                  // Best case: API returns exact booked times
+                                  isBooked = bookedTimes.includes(time);
+                                } else if (useCountFallback) {
+                                  // Fallback: assume first N are booked
+                                  isBooked = idx < bookedCount;
+                                } else {
+                                  isBooked = false;
+                                }
+
+                                const isSelected =
+                                  selSlot?.availabilityId === slot._id &&
+                                  selSlot?.startTime === time;
+
+                                return (
+                                  <button
+                                    key={`${slot._id}-${time}`}
+                                    onClick={() => {
+                                      if (!isBooked) {
+                                        setSelSlot({
+                                          availabilityId: slot._id,
+                                          startTime: time,
+                                          slotDuration: slot.slotDuration,
+                                          patientNumber: idx + 1,
+                                        });
+                                      }
+                                    }}
+                                    disabled={isBooked}
+                                    className={`
+                        py-2 px-1 rounded-xl text-xs font-bold border transition-all
+                        flex flex-col items-center
+                        ${isBooked
+                                        ? "bg-red-50 text-red-300 border-red-100 cursor-not-allowed opacity-70"
+                                        : isSelected
+                                          ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
+                                          : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 cursor-pointer"
+                                      }
+                      `}
+                                  >
+                                    <span className={isBooked ? "line-through" : ""}>{time}</span>
+                                    {isBooked ? (
+                                      <span className="text-[8px] text-red-300">Booked</span>
+                                    ) : (
+                                      <span
+                                        className={`text-[8px] ${isSelected ? "text-blue-100" : "text-gray-400"
+                                          }`}
+                                      >
+                                        #{idx + 1}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -685,162 +757,22 @@ const fetchSlots = useCallback(async (d) => {
               {selSlot && date && (
                 <div className="pt-2 border-t border-gray-100">
                   <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-100 mb-3">
-                    <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-=======
-{date && (
-  <div>
-    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-      Available Slots
-    </p>
-    {loadSlots ? (
-      <div className="space-y-3">
-        {[1, 2].map((i) => (
-          <div key={i} className="border border-gray-100 rounded-xl p-3 animate-pulse">
-            <div className="h-4 w-32 bg-gray-200 rounded mb-2" />
-            <div className="grid grid-cols-3 gap-2">
-              {[1, 2, 3].map((j) => (
-                <div key={j} className="h-10 bg-gray-100 rounded-xl" />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    ) : slots.length === 0 ? (
-      <div className="flex flex-col items-center py-8 text-center">
-        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-lg mb-2">📅</div>
-        <p className="text-xs text-gray-500 font-medium">No availability on this date</p>
-        <p className="text-xs text-gray-400">Try another date</p>
-      </div>
-    ) : (
-      <div className="space-y-4">
-        {slots.map((slot) => {
-          const timeSlots = generateTimeSlots(
-            slot.startTime,
-            slot.endTime,
-            slot.slotDuration || 30
-          );
-
-          // bookedTimes comes from the API — array of booked time strings
-          // e.g. ["09:00", "10:30"]
-          const bookedTimes = slot.bookedTimes || [];
-
-          // fallback: if bookedTimes not available, use count-based
-          const bookedCount = slot.bookedSlots || 0;
-          const useCountFallback = bookedTimes.length === 0 && bookedCount > 0;
-
-          return (
-            <div
-              key={slot._id}
-              className="border border-gray-100 rounded-xl p-3 transition-all"
-            >
-              <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
-                <span className="text-xs font-semibold text-gray-700">
-                  {slot.startTime} – {slot.endTime} ({slot.slotDuration || 30} min)
-                </span>
-                <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full ${
-                    (slot.totalSlots || timeSlots.length) - bookedCount > 0
-                      ? "bg-green-100 text-green-600"
-                      : "bg-red-100 text-red-500"
-                  }`}
-                >
-                  {Math.max(0, (slot.totalSlots || timeSlots.length) - bookedCount)}/
-                  {slot.totalSlots || timeSlots.length} available
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                {timeSlots.map((time, idx) => {
-                  // Check if this specific time is booked
-                  let isBooked;
-                  if (bookedTimes.length > 0) {
-                    // Best case: API returns exact booked times
-                    isBooked = bookedTimes.includes(time);
-                  } else if (useCountFallback) {
-                    // Fallback: assume first N are booked
-                    isBooked = idx < bookedCount;
-                  } else {
-                    isBooked = false;
-                  }
-
-                  const isSelected =
-                    selSlot?.availabilityId === slot._id &&
-                    selSlot?.startTime === time;
-
-                  return (
-                    <button
-                      key={`${slot._id}-${time}`}
-                      onClick={() => {
-                        if (!isBooked) {
-                          setSelSlot({
-                            availabilityId: slot._id,
-                            startTime: time,
-                            slotDuration: slot.slotDuration,
-                            patientNumber: idx + 1,
-                          });
-                        }
-                      }}
-                      disabled={isBooked}
-                      className={`
-                        py-2 px-1 rounded-xl text-xs font-bold border transition-all
-                        flex flex-col items-center
-                        ${
-                          isBooked
-                            ? "bg-red-50 text-red-300 border-red-100 cursor-not-allowed opacity-70"
-                            : isSelected
-                            ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
-                            : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 cursor-pointer"
-                        }
-                      `}
-                    >
-                      <span className={isBooked ? "line-through" : ""}>{time}</span>
-                      {isBooked ? (
-                        <span className="text-[8px] text-red-300">Booked</span>
-                      ) : (
-                        <span
-                          className={`text-[8px] ${
-                            isSelected ? "text-blue-100" : "text-gray-400"
-                          }`}
-                        >
-                          #{idx + 1}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-  </div>
-)}
-              {selSlot && date && (
-                <div className="pt-2 border-t border-gray-100">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-100 mb-3">
                     <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
->>>>>>> c575229fd264984ad7eb080824792207e08e788a
                     <p className="text-xs text-blue-700 font-medium">
                       Selected: {new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} at {selSlot.startTime}
                       {selSlot.patientNumber && ` (Patient #${selSlot.patientNumber})`}
                     </p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => onBook(doctor, selSlot, date)}
                     className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold
-<<<<<<< HEAD
-                      shadow-md shadow-blue-200 transition-colors flex items-center justify-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-=======
                       shadow-md shadow-blue-200 transition-colors flex items-center justify-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
->>>>>>> c575229fd264984ad7eb080824792207e08e788a
                     Confirm Booking
                   </button>
                 </div>
@@ -939,18 +871,10 @@ export default function DoctorsPage() {
   const [specialtyQ, setSpecialtyQ] = useState("All Specialties");
   const [dateQ, setDateQ] = useState("");
 
-<<<<<<< HEAD
-  // Modals
-  const [profileDoc, setProfileDoc] = useState(null);
-  const [bookingData, setBookingData] = useState(null);   // { doctor, slot, date }
-  const [summaryData, setSummaryData] = useState(null);   // { doctor, slot, date, bookingInfo, appointmentId }
-  const [successData, setSuccessData] = useState(null);   // free-appt success
-=======
   const [profileDoc, setProfileDoc] = useState(null);
   const [bookingData, setBookingData] = useState(null);
   const [summaryData, setSummaryData] = useState(null);
   const [successData, setSuccessData] = useState(null);
->>>>>>> c575229fd264984ad7eb080824792207e08e788a
   const [booking, setBooking] = useState(false);
   const [paying, setPaying] = useState(false);
 
@@ -990,21 +914,11 @@ export default function DoctorsPage() {
 
   useEffect(() => { handleSearch(); }, []);
 
-<<<<<<< HEAD
-  // ── Step 1: Book appointment (create record in DB) ──────────────────────────
-  // ── Step 1: Reserve slot (create temporary hold) ──────────────────────────
-=======
->>>>>>> c575229fd264984ad7eb080824792207e08e788a
   const handleBookConfirm = async ({ reason, isForOthers, guestInfo }) => {
     const { doctor, slot, date } = bookingData;
     setBooking(true);
     try {
-<<<<<<< HEAD
-      // Reserve the slot first (no appointment created yet)
-      const resp = await axios.post(`${API_BASE_APPOINTMENT}/appointments/reserve`, {
-=======
       const resp = await axios.post(`${API_BASE}/appointments/reserve`, {
->>>>>>> c575229fd264984ad7eb080824792207e08e788a
         doctorId: doctor._id,
         doctorName: doctor.name,
         specialty: doctor.specialty,
@@ -1017,137 +931,24 @@ export default function DoctorsPage() {
           age: guestInfo.age,
           email: guestInfo.email,
         },
-<<<<<<< HEAD
-=======
         availabilityId: slot.availabilityId,
         slotTime: slot.startTime,
         patientNumber: slot.patientNumber,
->>>>>>> c575229fd264984ad7eb080824792207e08e788a
       }, { headers: authHeaders() });
 
       const { reservationId, reservationData } = resp.data;
       const hasFee = doctor.consultationFee > 0;
-<<<<<<< HEAD
-
-      setBookingData(null);
-
-      if (hasFee) {
-        // Store reservation ID to use during payment
-        setSummaryData({
-          doctor,
-          slot,
-          date,
-          reservationId,  // ← Make sure this is included
-          reservationData,
-          bookingInfo: {
-            isForSomeoneElse: isForOthers,
-            bookedFor: { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email },
-          },
-        });
-        addToast("Slot reserved! Please complete payment within 10 minutes.", "info");
-      } else {
-        // Free appointment - create directly
-        const createResp = await axios.post(`${API_BASE}/appointments/create-from-reservation`, {
-          reservationId,
-          paymentId: "free_appointment",
-        }, { headers: authHeaders() });
-
-        setSuccessData({ doctor, slot, date });
-        addToast("Appointment booked successfully!", "success");
-        setTimeout(() => router.push("/dashboard/appointments"), 3000);
-      }
-    } catch (err) {
-      console.error("Booking error:", err);
-      addToast(err.response?.data?.message || "Booking failed. Please try again.", "error");
-    } finally {
-      setBooking(false);
-    }
-  };
-
-  // ── Step 2: Pay via PayHere ─────────────────────────────────────────────────
-  // ── Step 2: Pay via PayHere ─────────────────────────────────────────────────
-  const handleProceedToPayment = async () => {
-    if (!summaryData) return;
-    setPaying(true);
-    try {
-      const { doctor, reservationId, bookingInfo } = summaryData;  // ← Get reservationId from summaryData
-
-      const { data } = await axios.post(
-        `${API_BASE_PAYMENT}/payments/initiate`,
-        {
-          appointmentId: reservationId,  // ← Use reservationId as appointmentId
-          amount: doctor.consultationFee,
-          patientName: bookingInfo.isForSomeoneElse
-            ? bookingInfo.bookedFor?.name
-            : undefined,
-          patientEmail: bookingInfo.isForSomeoneElse
-            ? bookingInfo.bookedFor?.email
-            : undefined,
-          reservationId,  // ← Pass reservationId separately
-        },
-        { headers: authHeaders() }
-      );
-
-      console.log("🔍 Full paymentData being sent:", JSON.stringify(data.paymentData, null, 2));
-
-      // Verify all required fields are present
-      const required = ['merchant_id', 'order_id', 'amount', 'currency', 'hash', 'return_url', 'notify_url'];
-      required.forEach(field => {
-        if (!data.paymentData[field]) {
-          console.error(`❌ MISSING REQUIRED FIELD: ${field}`);
-        } else {
-          console.log(`✅ ${field}: ${data.paymentData[field]}`);
-        }
-      });
-
-      if (data.success && data.checkoutUrl && data.paymentData) {
-        // Save orderId so payment-status page can poll even without URL params
-        if (typeof window !== "undefined") {
-          localStorage.setItem("lastPayhereOrderId", data.orderId);
-          // Also store reservationId for recovery
-          localStorage.setItem("lastReservationId", reservationId);
-        }
-
-        // Build hidden form and submit to PayHere
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = data.checkoutUrl;
-        form.style.display = "none";
-
-        Object.keys(data.paymentData).forEach((key) => {
-          if (data.paymentData[key] !== null && data.paymentData[key] !== undefined) {
-            const input = document.createElement("input");
-            input.type = "hidden";
-            input.name = key;
-            input.value = data.paymentData[key];
-            form.appendChild(input);
-          }
-        });
-
-        document.body.appendChild(form);
-        console.log("🚀 Submitting to PayHere:", data.checkoutUrl);
-        form.submit();
-      } else {
-        throw new Error("Invalid payment response from server");
-      }
-    } catch (err) {
-      console.error("Payment error:", err);
-      addToast(err.response?.data?.message || "Payment failed. Please try again.", "error");
-      setPaying(false);
-    }
-  };
-=======
       // This will fetch fresh slot data with updated bookedSlots
-    if (profileDoc) {
-      // Refresh the slots in the doctor profile modal
-      const currentDate = date;
-      const { data: freshSlots } = await axios.get(
-        `${API_BASE}/doctors/${doctor._id}/availability?date=${currentDate}`,
-        { headers: authHeaders() }
-      );
-      // Update the slots state in DoctorProfileModal
-      // You'll need to pass a refresh function or use state management
-    }
+      if (profileDoc) {
+        // Refresh the slots in the doctor profile modal
+        const currentDate = date;
+        const { data: freshSlots } = await axios.get(
+          `${API_BASE}/doctors/${doctor._id}/availability?date=${currentDate}`,
+          { headers: authHeaders() }
+        );
+        // Update the slots state in DoctorProfileModal
+        // You'll need to pass a refresh function or use state management
+      }
 
       setBookingData(null);
 
@@ -1169,7 +970,7 @@ export default function DoctorsPage() {
           reservationId,
           paymentId: "free_appointment",
         }, { headers: authHeaders() });
-        
+
         setSuccessData({ doctor, slot, date });
         addToast("Appointment booked successfully!", "success");
         setTimeout(() => router.push("/dashboard/appointments"), 3000);
@@ -1232,7 +1033,6 @@ export default function DoctorsPage() {
       setPaying(false);
     }
   };
->>>>>>> c575229fd264984ad7eb080824792207e08e788a
 
   const handleOpenBook = (doctor, slot, date) => {
     setProfileDoc(null);
