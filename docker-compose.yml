@@ -59,6 +59,16 @@ services:
       - ai-symptom-checker-data:/data/db
     networks:
       - healthcare-network
+
+  telemedicine-db:
+    image: mongo:latest
+    container_name: telemedicine-db
+    ports:
+      - "27023:27017"
+    volumes:
+      - telemedicine-data:/data/db
+    networks:
+      - healthcare-network
   # Backend Services
   
   rabbitmq:
@@ -166,7 +176,25 @@ services:
       - DB_URL=mongodb://ai-symptom-checker-db:27017/aisymptomcheckerdb
     depends_on:
       - ai-symptom-checker-db
+    networks:
+      - healthcare-network
 
+  telemedicine-service:
+    build: ./services/telemedicine-service
+    container_name: telemedicine-service
+    ports:
+      - "3008:3008"
+    environment:
+      - PORT=3008
+      - DB_URL=mongodb://telemedicine-db:27017/telemedicinedb
+      - JWT_SECRET=your-super-secret-jwt-key-change-this
+      - APPOINTMENT_SERVICE_URL=http://appointment-service:3003
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - NODE_ENV=development
+    depends_on:
+      - telemedicine-db
+      - appointment-service
+      - rabbitmq
     networks:
       - healthcare-network
 
@@ -183,6 +211,7 @@ services:
       - PAYMENT_SERVICE=http://payment-service:3004
       - NOTIFICATION_SERVICE=http://notification-service:3005
       - AI_SYMPTOM_CHECKER=http://ai-symptom-checker:3006
+      - TELEMEDICINE_SERVICE=http://telemedicine-service:3008
       - JWT_SECRET=${JWT_SECRET}
     depends_on:
       - patient-service
@@ -191,6 +220,7 @@ services:
       - payment-service
       - notification-service
       - ai-symptom-checker
+      - telemedicine-service
     networks:
       - healthcare-network
 
@@ -215,3 +245,4 @@ volumes:
   payment-data:
   notification-data:
   ai-symptom-checker-data:
+  telemedicine-data:

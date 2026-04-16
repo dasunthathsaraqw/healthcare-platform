@@ -84,7 +84,8 @@ function AppointmentCard({ appt, onClick }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
-  const [cancelStep, setCancelStep] = useState("view");
+  const router = useRouter();
+  const [cancelStep, setCancelStep] = useState("view"); // "view" | "confirm"
   const [reason, setReason] = useState("");
 
   useEffect(() => {
@@ -101,11 +102,6 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const docName = appt.doctorName || "Doctor";
   const dt = appt.dateTime || appt.date;
 
-  const handleJoinMeeting = () => {
-    if (appt.meetingLink) {
-      window.open(appt.meetingLink, "_blank");
-    }
-  };
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
@@ -195,11 +191,10 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
           <div className="space-y-3 pt-2">
             {cancelStep === "view" ? (
               <>
-                {/* Join Meeting for confirmed appointments */}
-                {status === "confirmed" && appt.meetingLink && (
+                {status === "confirmed" && (
                   <button 
-                    onClick={handleJoinMeeting}
-                    className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3"
+                    onClick={() => router.push(`/dashboard/consultation/${appt._id}`)}
+                    className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 overflow-hidden group"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
