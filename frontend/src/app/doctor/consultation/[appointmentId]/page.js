@@ -620,7 +620,7 @@ export default function ConsultationPage() {
     const pid = appointment?.patientId?._id || appointment?.patientId;
     try {
       // Save prescription
-      await axios.post(`${API_BASE}/doctors/prescriptions`, {
+      const prescriptionRes = await axios.post(`${API_BASE}/doctors/prescriptions`, {
         patientId:     pid,
         appointmentId: appointmentId,
         diagnosis:     rxData.diagnosis,
@@ -629,15 +629,25 @@ export default function ConsultationPage() {
         followUpDate:  rxData.followUpDate || undefined,
       }, { headers: authHeaders() });
 
-      // Complete appointment
-      await axios.put(
-        `${API_BASE}/doctors/appointments/${appointmentId}/complete`,
-        {},
-        { headers: authHeaders() }
-      );
+      const savedPrescription = prescriptionRes.data?.prescription;
+      if (savedPrescription) {
+        setPrescriptions((prev) => [savedPrescription, ...prev]);
+      }
+
+      // Complete appointment (non-blocking for Rx save success UX)
+      try {
+        await axios.put(
+          `${API_BASE}/doctors/appointments/${appointmentId}/complete`,
+          {},
+          { headers: authHeaders() }
+        );
+      } catch (completeErr) {
+        console.warn("Appointment completion failed after prescription save:", completeErr?.response?.data || completeErr.message);
+      }
 
       setCompleted(true);
       setSuccessModal(true);
+      setError("");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to save prescription");
     } finally {

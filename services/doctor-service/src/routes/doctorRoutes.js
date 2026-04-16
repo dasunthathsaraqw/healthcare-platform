@@ -16,6 +16,7 @@ const {
   completeAppointment,
   issuePrescription,
   getPrescriptions,
+  getPrescriptionsByPatient,
   getPatients,
   getPatientDetails,
   getDashboardStats,
@@ -57,6 +58,7 @@ router.put("/appointments/:id/complete", authenticate, completeAppointment);
 // Prescriptions
 router.get("/prescriptions",  authenticate, getPrescriptions);
 router.post("/prescriptions", authenticate, issuePrescription);
+router.get("/prescriptions/patient/:patientId", getPrescriptionsByPatient);
 
 // Patients
 router.get("/patients",            authenticate, getPatients);
