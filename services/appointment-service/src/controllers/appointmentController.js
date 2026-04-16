@@ -11,8 +11,8 @@ const { lockSlot, unlockSlot, isSlotLocked } = require("../utils/slotLocker");
  * In production this would integrate with a Jitsi / Daily.co / Zoom API.
  */
 const generateMeetingLink = (appointmentId) => {
-  const room = `healthcare-${appointmentId}-${Math.random().toString(36).slice(2, 9)}`;
-  return `https://meet.jit.si/${room}`;
+  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  return `${baseUrl}/dashboard/consultation/${appointmentId}`;
 };
 
 /**
@@ -402,13 +402,13 @@ if (reservation.availabilityId) {
       dateTime: apptDateTime,
       reason: reason || "",
       consultationFee: consultationFee || 0,
-      status: hasFee ? "pending" : "confirmed",  // pending = awaiting payment
-      paymentStatus: hasFee ? "unpaid" : "paid", // unpaid = not paid yet
-      meetingLink: hasFee ? "" : generateMeetingLink(`${patientId}-${Date.now()}`),
+      status: "confirmed", // Auto-confirm
+      paymentStatus: "paid", // Auto-mark as paid
       isForSomeoneElse: !!isForSomeoneElse,
       bookedFor: bookedFor || { name: "", age: null, phone: "", email: "" },
       patientNumber,
     });
+    appointment.meetingLink = generateMeetingLink(appointment._id.toString());
 
     await appointment.save();
 
