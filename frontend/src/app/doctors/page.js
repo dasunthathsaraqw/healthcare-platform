@@ -5,10 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
-const API_BASE = process.env.NEXT_PUBLIC_DOCTOR_API_URL || "http://localhost:8080/api";
-const API_BASE_APPOINTMENT = process.env.NEXT_PUBLIC_APPOINTMENT_API_URL || "http://localhost:8080/api";
-const API_BASE_PAYMENT = process.env.NEXT_PUBLIC_PAYMENT_API_URL || "http://localhost:8080/api";
-
+const API_BASE = "http://localhost:8080/api";
 
 function authHeaders() {
   const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -20,7 +17,7 @@ function getCurrentUser() {
   try {
     const userStr = typeof window !== "undefined" ? localStorage.getItem("user") : null;
     if (userStr) return JSON.parse(userStr);
-  } catch (e) {}
+  } catch (e) { }
   return { name: "", email: "", id: "" };
 }
 
@@ -42,7 +39,6 @@ const generateTimeSlots = (startTime, endTime, slotDuration) => {
   const startMinutes = timeToMinutes(startTime);
   const endMinutes = timeToMinutes(endTime);
   const duration = slotDuration || 30;
-
   for (let minutes = startMinutes; minutes < endMinutes; minutes += duration) {
     slots.push(minutesToTime(minutes));
   }
@@ -329,9 +325,9 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              ["Date",           formattedDate],
-              ["Time",           slot.startTime],
-              ["Duration",       `${slot.slotDuration || 30} min`],
+              ["Date", formattedDate],
+              ["Time", slot.startTime],
+              ["Duration", `${slot.slotDuration || 30} min`],
               ["Reservation ID", reservationId ? `#${reservationId.slice(-8).toUpperCase()}` : "—"],
             ].map(([label, val]) => (
               <div key={label} className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3">
@@ -347,7 +343,7 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
             {bookingInfo?.isForSomeoneElse && bookingInfo?.bookedFor?.name ? (
               <div className="flex items-center gap-2">
                 <svg className="w-3.5 h-3.5 text-purple-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
                 <div>
                   <p className="text-xs font-bold text-gray-800">{bookingInfo.bookedFor.name}</p>
@@ -357,7 +353,7 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
             ) : (
               <div className="flex items-center gap-2">
                 <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
                 <div>
                   <p className="text-xs font-bold text-gray-800">{bookingInfo?.loggedInUser?.name || "You"}</p>
@@ -500,19 +496,16 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
     setLoadSlots(true);
     setSelSlot(null);
     try {
-
       const { data } = await axios.get(
         `${API_BASE}/doctors/${doctor._id}/availability?date=${d}`,
         { headers: authHeaders() }
       );
       const rawSlots = data.availability || data || [];
 
-      // Fetch booked appointments for this doctor on this date
-      // to know EXACTLY which time slots are taken
       let bookedTimes = [];
       try {
         const apptRes = await axios.get(
-          `${API_BASE_APPOINTMENT}/appointments/doctor/${doctor._id}?date=${d}`,
+          `${API_BASE}/appointments/doctor/${doctor._id}?date=${d}`,
           { headers: authHeaders() }
         );
         const appts = apptRes.data.appointments || [];
@@ -664,11 +657,10 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                               <span className="text-xs font-semibold text-gray-700">
                                 {slot.startTime} – {slot.endTime} ({slot.slotDuration || 30} min)
                               </span>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                                (slot.totalSlots || timeSlots.length) - bookedCount > 0
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full ${(slot.totalSlots || timeSlots.length) - bookedCount > 0
                                   ? "bg-green-100 text-green-600"
                                   : "bg-red-100 text-red-500"
-                              }`}>
+                                }`}>
                                 {Math.max(0, (slot.totalSlots || timeSlots.length) - bookedCount)}/{slot.totalSlots || timeSlots.length} available
                               </span>
                             </div>
@@ -692,8 +684,8 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                                       ${isBooked
                                         ? "bg-red-50 text-red-300 border-red-100 cursor-not-allowed opacity-70"
                                         : isSelected
-                                        ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
-                                        : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 cursor-pointer"
+                                          ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
+                                          : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 cursor-pointer"
                                       }`}>
                                     <span className={isBooked ? "line-through" : ""}>{time}</span>
                                     {isBooked
@@ -715,7 +707,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
               {selSlot && date && (
                 <div className="pt-2 border-t border-gray-100">
                   <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-xl border border-blue-100 mb-3">
-                    <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+                    <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                     <p className="text-xs text-blue-700 font-medium">
                       Selected: {new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} at {selSlot.startTime}
                       {selSlot.patientNumber && ` (Patient #${selSlot.patientNumber})`}
@@ -724,7 +716,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                   <button onClick={() => onBook(doctor, selSlot, date)}
                     className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold
                       shadow-md shadow-blue-200 transition-colors flex items-center justify-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     Confirm Booking
                   </button>
                 </div>
@@ -815,20 +807,20 @@ function DoctorCard({ doctor, onView }) {
 export default function DoctorsPage() {
   const router = useRouter();
 
-  const [doctors,  setDoctors]  = useState([]);
-  const [loading,  setLoading]  = useState(false);
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const [nameQ,      setNameQ]      = useState("");
+  const [nameQ, setNameQ] = useState("");
   const [specialtyQ, setSpecialtyQ] = useState("All Specialties");
-  const [dateQ,      setDateQ]      = useState("");
+  const [dateQ, setDateQ] = useState("");
 
-  const [profileDoc,  setProfileDoc]  = useState(null);
+  const [profileDoc, setProfileDoc] = useState(null);
   const [bookingData, setBookingData] = useState(null);
   const [summaryData, setSummaryData] = useState(null);
   const [successData, setSuccessData] = useState(null);
-  const [booking,     setBooking]     = useState(false);
-  const [paying,      setPaying]      = useState(false);
+  const [booking, setBooking] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -848,9 +840,9 @@ export default function DoctorsPage() {
     setSearched(true);
     try {
       const params = {};
-      if (nameQ.trim())                    params.name      = nameQ.trim();
+      if (nameQ.trim()) params.name = nameQ.trim();
       if (specialtyQ !== "All Specialties") params.specialty = specialtyQ;
-      if (dateQ)                            params.date      = dateQ;
+      if (dateQ) params.date = dateQ;
 
       const { data } = await axios.get(`${API_BASE}/doctors`, { params, headers: authHeaders() });
       if (typeof window !== "undefined") window.plannedDate = dateQ;
@@ -871,33 +863,33 @@ export default function DoctorsPage() {
 
     // ✅ Read logged-in user ONCE here so it's always correct
     const currentUser = getCurrentUser();
-    const loggedInName  = currentUser.name  || "";
+    const loggedInName = currentUser.name || "";
     const loggedInEmail = currentUser.email || "";
 
     try {
       // The person paying/booking is always the logged-in user (patientName).
       // bookedFor is who the appointment is FOR (may differ if booking for someone else).
       const payload = {
-        doctorId:         doctor._id,
-        doctorName:       doctor.name,
-        specialty:        doctor.specialty,
-        consultationFee:  doctor.consultationFee,
-        dateTime:         `${date}T${slot.startTime}:00`,
+        doctorId: doctor._id,
+        doctorName: doctor.name,
+        specialty: doctor.specialty,
+        consultationFee: doctor.consultationFee,
+        dateTime: `${date}T${slot.startTime}:00`,
         reason,
         // ✅ Always send logged-in user as patientName so DB saves correctly
-        patientName:      loggedInName,
-        patientEmail:     loggedInEmail,
+        patientName: loggedInName,
+        patientEmail: loggedInEmail,
         isForSomeoneElse: isForOthers,
         bookedFor: isForOthers
           ? { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email }
           : { name: loggedInName, age: "", email: loggedInEmail },
-        availabilityId:   slot.availabilityId,
-        slotTime:         slot.startTime,
-        patientNumber:    slot.patientNumber,
+        availabilityId: slot.availabilityId,
+        slotTime: slot.startTime,
+        patientNumber: slot.patientNumber,
       };
 
       const resp = await axios.post(
-        `${API_BASE_APPOINTMENT}/appointments/reserve`,
+        `${API_BASE}/appointments/reserve`,
         payload,
         { headers: authHeaders() }
       );
@@ -926,7 +918,7 @@ export default function DoctorsPage() {
       } else {
         // Free appointment — create immediately
         await axios.post(
-          `${API_BASE_APPOINTMENT}/appointments/create-from-reservation`,
+          `${API_BASE}/appointments/create-from-reservation`,
           { reservationId, paymentId: "free_appointment" },
           { headers: authHeaders() }
         );
@@ -951,17 +943,17 @@ export default function DoctorsPage() {
       // ✅ Determine correct patient name/email for PayHere form
       // PayHere shows these on the payment page — use the person who is actually paying
       // (the logged-in user), NOT the guest (bookedFor)
-      const payerName  = bookingInfo.loggedInUser?.name  || "";
+      const payerName = bookingInfo.loggedInUser?.name || "";
       const payerEmail = bookingInfo.loggedInUser?.email || "";
 
       const { data } = await axios.post(
-        `${API_BASE_PAYMENT}/payments/initiate`,
+        `${API_BASE}/payments/initiate`,
         {
           appointmentId: reservationId,   // backend uses this as the key
           reservationId,                  // also send explicitly for metadata
-          amount:        doctor.consultationFee,
-          patientName:   payerName,       // payer = logged-in user
-          patientEmail:  payerEmail,
+          amount: doctor.consultationFee,
+          patientName: payerName,       // payer = logged-in user
+          patientEmail: payerEmail,
         },
         { headers: authHeaders() }
       );
@@ -981,8 +973,8 @@ export default function DoctorsPage() {
         Object.keys(data.paymentData).forEach((key) => {
           if (data.paymentData[key] !== null && data.paymentData[key] !== undefined) {
             const input = document.createElement("input");
-            input.type  = "hidden";
-            input.name  = key;
+            input.type = "hidden";
+            input.name = key;
             input.value = data.paymentData[key];
             form.appendChild(input);
           }
