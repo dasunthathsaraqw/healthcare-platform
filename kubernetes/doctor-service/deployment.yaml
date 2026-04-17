@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: doctor-service-deployment
+  namespace: healthcare
+  labels:
+    app: doctor-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: doctor-service
+  template:
+    metadata:
+      labels:
+        app: doctor-service
+    spec:
+      containers:
+      - name: doctor-service
+        image: kalana/doctor-service:latest
+        ports:
+        - containerPort: 3002
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        env:
+        - name: PORT
+          value: "3002"
+        - name: DB_URL
+          valueFrom:
+            secretKeyRef:
+              name: healthcare-secrets
+              key: doctor-db-url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: healthcare-secrets
+              key: jwt-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: doctor-service
+  namespace: healthcare
+spec:
+  selector:
+    app: doctor-service
+  ports:
+    - protocol: TCP
+      port: 3002
+      targetPort: 3002

@@ -1,0 +1,90 @@
+# PersistentVolumeClaim for Notification Database
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: notification-db-pvc
+  namespace: healthcare
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Deployment for Notification Database
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-db
+  namespace: healthcare
+  labels:
+    app: notification-db
+    service: mongodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-db
+  template:
+    metadata:
+      labels:
+        app: notification-db
+        service: mongodb
+    spec:
+      containers:
+      - name: mongodb
+        image: mongo:latest
+        ports:
+        - containerPort: 27017
+          name: mongodb
+        env:
+        - name: MONGO_INITDB_DATABASE
+          value: "notificationdb"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+        volumeMounts:
+        - name: notification-db-storage
+          mountPath: /data/db
+        livenessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: notification-db-storage
+        persistentVolumeClaim:
+          claimName: notification-db-pvc
+---
+# Service for Notification Database
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-db-service
+  namespace: healthcare
+  labels:
+    app: notification-db
+spec:
+  selector:
+    app: notification-db
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
+      name: mongodb
+  clusterIP: None

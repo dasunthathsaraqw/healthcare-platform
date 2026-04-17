@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway-deployment
+  namespace: healthcare
+  labels:
+    app: api-gateway
+    tier: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        tier: gateway
+    spec:
+      containers:
+      - name: api-gateway
+        image: kalana/api-gateway:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PORT
+          value: "8080"
+        - name: PATIENT_SERVICE
+          value: "http://patient-service:3001"
+        - name: DOCTOR_SERVICE
+          value: "http://doctor-service:3002"
+        - name: APPOINTMENT_SERVICE
+          value: "http://appointment-service:3003"
+        - name: PAYMENT_SERVICE
+          value: "http://payment-service:3004"
+        - name: NOTIFICATION_SERVICE
+          value: "http://notification-service:3005"
+        - name: AI_SYMPTOM_CHECKER
+          value: "http://ai-symptom-checker:3006"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: healthcare-secrets
+              key: jwt-secret
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: healthcare
+  labels:
+    app: api-gateway
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: http
+  type: LoadBalancer  # Exposes to outside the cluster
