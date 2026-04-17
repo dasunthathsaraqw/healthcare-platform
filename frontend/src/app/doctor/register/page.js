@@ -99,7 +99,7 @@ const SLIDES = [
 
 const SLIDE_DURATION = 3000;
 
-// ─── Typing animation hook  ──────────────────────────────────────────────────
+// ─── Typing animation hook ──────────────────────────────────────────────────
 function useTypingText(text, active) {
   const [displayed, setDisplayed] = useState("");
   const rafRef = useRef(null);
@@ -114,7 +114,7 @@ function useTypingText(text, active) {
     const type = () => {
       if (i <= text.length) {
         setDisplayed(text.slice(0, i));
-        i++;
+        i++;/
         rafRef.current = setTimeout(type, 60);
       }
     };
