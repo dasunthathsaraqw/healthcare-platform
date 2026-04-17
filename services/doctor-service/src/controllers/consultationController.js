@@ -102,20 +102,45 @@ const completeConsultation = async (req, res) => {
                 err.response?.data?.message || "Failed to verify appointment");
         }
 
-        // Update appointment status to completed
-        await axios.put(
-            `${APPOINTMENT_SERVICE_URL}/api/appointments/${appointmentId}/status`,
-            { status: "completed" },
-            { headers: authHeader(req) }
-        );
+        // Update appointment status to completed.
+        // Primary route is PATCH /api/appointments/:id/status. A PUT fallback keeps
+        // compatibility with older appointment-service route shapes.
+        try {
+            await axios.patch(
+                `${APPOINTMENT_SERVICE_URL}/api/appointments/${appointmentId}/status`,
+                { status: "completed" },
+                { headers: authHeader(req) }
+            );
+        } catch (statusUpdateErr) {
+            const methodNotAllowed =
+                statusUpdateErr.response?.status === 404 ||
+                statusUpdateErr.response?.status === 405;
+
+            if (!methodNotAllowed) {
+                throw statusUpdateErr;
+            }
+
+            await axios.put(
+                `${APPOINTMENT_SERVICE_URL}/api/appointments/manage/${appointmentId}/status`,
+                { status: "completed" },
+                { headers: authHeader(req) }
+            );
+        }
 
         return res.status(200).json({
             success: true,
             message: "Consultation completed successfully",
         });
     } catch (error) {
-        console.error("completeConsultation error:", error);
-        return errorResponse(res, 500, "Failed to complete consultation");
+        console.error(
+            "completeConsultation error:",
+            error.response?.data || error.message
+        );
+        return errorResponse(
+            res,
+            error.response?.status || 500,
+            error.response?.data?.message || "Failed to complete consultation"
+        );
     }
 };
 
