@@ -18,6 +18,7 @@ const authHeader = (req) => ({
   Authorization: req.headers.authorization || "",
 });
 
+
 // Helper function to calculate total slots from time range and duration
 const calculateTotalSlots = (startTime, endTime, slotDuration) => {
   const startMins = timeToMinutes(startTime);
@@ -542,36 +543,166 @@ const deletePrescription = async (req, res) => {
 
 /**
  * GET /api/doctors/patients
- * Unique patient list derived from prescriptions + appointments
+ * Get all unique patients for the logged-in doctor
+ * Fetches patient IDs from appointment service, then gets details from patient service
  */
 const getPatients = async (req, res) => {
   try {
-    // Get unique patientIds from prescriptions this doctor issued
-    const patientIds = await Prescription.distinct("patientId", {
-      doctorId: req.doctor._id,
+    const doctorId = req.doctor._id;
+
+    console.log("=== getPatients Debug ===");
+    console.log("Doctor ID:", doctorId);
+    console.log("Appointment Service URL:", APPOINTMENT_SERVICE_URL);
+
+    // 1. Call appointment service to get patient IDs and stats
+    let appointmentServiceResponse;
+    try {
+      console.log(`Calling: ${APPOINTMENT_SERVICE_URL}/api/appointments/manage/doctor/${doctorId}/patients`);
+
+      appointmentServiceResponse = await axios.get(
+        `${APPOINTMENT_SERVICE_URL}/api/appointments/manage/doctor/${doctorId}/patients`,
+        {
+          headers: authHeader(req),
+          timeout: 5000,
+        }
+      );
+
+      console.log("Appointment service response status:", appointmentServiceResponse.status);
+      console.log("Appointment service response data:", appointmentServiceResponse.data);
+
+    } catch (err) {
+      console.error("Failed to fetch from appointment service:");
+      console.error("Error code:", err.code);
+      console.error("Error message:", err.message);
+      if (err.response) {
+        console.error("Response status:", err.response.status);
+        console.error("Response data:", err.response.data);
+      }
+      // If appointment service fails, fall back to prescriptions only
+      console.log("Falling back to prescriptions only...");
+      return await getPatientsFromPrescriptions(req, res);
+    }
+
+    const { patientIds, patientStats } = appointmentServiceResponse.data;
+
+    if (!patientIds || patientIds.length === 0) {
+      return res.status(200).json({ success: true, patients: [] });
+    }
+
+    // 2. Create a map of patient stats for quick lookup
+    const statsMap = new Map();
+    patientStats.forEach(stat => {
+      statsMap.set(stat.patientId.toString(), {
+        lastAppointment: stat.lastAppointment,
+        appointmentCount: stat.appointmentCount,
+      });
     });
 
-    // Enrich with Patient Service data
+    // 3. Fetch patient details from Patient Service
     const patientDetails = await Promise.allSettled(
-      patientIds.map((id) =>
-        axios
-          .get(`${PATIENT_SERVICE_URL}/api/patients/${id}`, {
-            headers: authHeader(req),
-          })
-          .then((r) => r.data?.patient || r.data)
-      )
+      patientIds.map(async (patientId) => {
+        try {
+          const response = await axios.get(
+            `${PATIENT_SERVICE_URL}/api/patients/${patientId}`,
+            {
+              headers: authHeader(req),
+              timeout: 5000,
+            }
+          );
+
+          const patient = response.data?.patient || response.data;
+          const stats = statsMap.get(patientId.toString()) || {};
+
+          // Get prescription count from doctor service database
+          const prescriptionCount = await Prescription.countDocuments({
+            doctorId: doctorId,
+            patientId: patientId,
+          });
+
+          return {
+            ...patient,
+            lastAppointment: stats.lastAppointment,
+            appointmentCount: stats.appointmentCount || 0,
+            totalVisits: stats.appointmentCount || 0,
+            lastVisit: stats.lastAppointment,
+            prescriptionCount,
+          };
+        } catch (err) {
+          console.warn(`Failed to fetch patient ${patientId}:`, err.message);
+          return null;
+        }
+      })
     );
 
+    // 4. Filter out failed requests
     const patients = patientDetails
-      .filter((r) => r.status === "fulfilled")
-      .map((r) => r.value);
+      .filter(result => result.status === "fulfilled" && result.value !== null)
+      .map(result => result.value);
 
-    return res.status(200).json({ success: true, patients });
+    // 5. Sort by last appointment (most recent first)
+    patients.sort((a, b) => {
+      if (!a.lastAppointment) return 1;
+      if (!b.lastAppointment) return -1;
+      return new Date(b.lastAppointment) - new Date(a.lastAppointment);
+    });
+
+    return res.status(200).json({
+      success: true,
+      patients,
+    });
   } catch (error) {
     console.error("getPatients error:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
+
+// Fallback function to get patients from prescriptions only
+const getPatientsFromPrescriptions = async (req, res) => {
+  try {
+    const doctorId = req.doctor._id;
+
+    // Get unique patientIds from prescriptions
+    const patientIds = await Prescription.distinct("patientId", { doctorId });
+
+    if (patientIds.length === 0) {
+      return res.status(200).json({ success: true, patients: [] });
+    }
+
+    // Fetch patient details from Patient Service
+    const patients = await Promise.all(
+      patientIds.map(async (patientId) => {
+        try {
+          const response = await axios.get(
+            `${PATIENT_SERVICE_URL}/api/patients/${patientId}`,
+            { headers: authHeader(req) }
+          );
+          return response.data?.patient || response.data;
+        } catch (err) {
+          console.warn(`Failed to fetch patient ${patientId}:`, err.message);
+          return null;
+        }
+      })
+    );
+
+    const validPatients = patients.filter(p => p !== null);
+
+    return res.status(200).json({
+      success: true,
+      patients: validPatients,
+      source: "prescriptions_only",
+    });
+  } catch (error) {
+    console.error("getPatientsFromPrescriptions error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 
 /**
  * GET /api/doctors/patients/:patientId

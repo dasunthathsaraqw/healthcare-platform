@@ -5,7 +5,8 @@ const { authenticate } = require("../middleware/auth");
 const {
   getDoctorAppointments,
   updateAppointmentStatus,
-  deleteAppointment
+  deleteAppointment,
+  getDoctorPatients
 } = require("../controllers/doctorAppointmentController");
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,5 +24,11 @@ router.put("/:id/status", authenticate, updateAppointmentStatus);
 // DELETE /api/appointments/manage/:id
 // Delete an appointment permanently
 router.delete("/:id", authenticate, deleteAppointment);
+
+router.get(
+  "/doctor/:doctorId/patients",
+
+  getDoctorPatients
+);
 
 module.exports = router;

@@ -62,6 +62,8 @@ router.post("/prescriptions", authenticate, issuePrescription);
 router.get("/prescriptions/patient/:patientId", getPrescriptionsByPatient);
 router.delete("/prescriptions/:prescriptionId", deletePrescription);
 
+
+
 // Patients
 router.get("/patients", authenticate, getPatients);
 router.get("/patients/:patientId", authenticate, getPatientDetails);
