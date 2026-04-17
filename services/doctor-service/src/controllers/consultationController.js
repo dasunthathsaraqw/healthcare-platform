@@ -1,7 +1,9 @@
 const axios = require("axios");
 
-const APPOINTMENT_SERVICE_URL = process.env.APPOINTMENT_SERVICE_URL || "http://localhost:3003";
-const PATIENT_SERVICE_URL = process.env.PATIENT_SERVICE_URL || "http://localhost:3001";
+const APPOINTMENT_SERVICE_URL =
+    process.env.APPOINTMENT_SERVICE_URL || "http://appointment-service:3003";
+const PATIENT_SERVICE_URL =
+    process.env.PATIENT_SERVICE_URL || "http://patient-service:3001";
 
 const authHeader = (req) => ({
     Authorization: req.headers.authorization || "",
