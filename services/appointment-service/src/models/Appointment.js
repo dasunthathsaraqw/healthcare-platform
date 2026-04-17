@@ -14,7 +14,7 @@ const appointmentSchema = new mongoose.Schema(
       index: true,
     },
 
-    // ── Denormalised display names (avoid cross-service lookups on every read) ─
+    // ── Denormalised display names ──────────────────────────────────────────
     patientName: {
       type: String,
       default: "",
@@ -46,10 +46,10 @@ const appointmentSchema = new mongoose.Schema(
       default: "",
     },
 
-    // ── Status lifecycle: pending → confirmed → completed | cancelled | rejected
+    // ── Status lifecycle ──────────────────────────────────────────────────────
     status: {
       type: String,
-      enum: ["pending", "confirmed", "completed", "cancelled", "rejected"],
+      enum: ["pending", "confirmed", "completed", "cancelled", "rejected","cancellation_requested"],
       default: "pending",
       index: true,
     },
@@ -57,6 +57,30 @@ const appointmentSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+    cancellationReason: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    // ── Guest Booking ────────────────────────────────────────────────────────
+    isForSomeoneElse: {
+      type: Boolean,
+      default: false,
+    },
+    bookedFor: {
+      name:  { type: String, default: "" },
+      age:   { type: Number, default: null },
+      phone: { type: String, default: "" },
+      email: { type: String, default: "" },
+    },
+
+    // ── Sequencing ────────────────────────────────────────────────────────────
+    patientNumber: {
+      type: Number,
+      default: 1,
+      index: true,
     },
 
     // ── Video consultation ─────────────────────────────────────────────────────
@@ -80,6 +104,28 @@ const appointmentSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+
+    // ── NEW: Slot management fields ───────────────────────────────────────────
+    availabilityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Availability",
+      default: null,
+      index: true,
+    },
+    slotTime: {
+      type: String,
+      default: null,
+    },
+    slotPosition: {
+      type: Number,
+      default: null,
+    },
+    refundRequested: { type: Boolean, default: false },
+    refundAmount: { type: Number, default: null },
+    refundRequestedAt: { type: Date, default: null },
+    refundProcessedBy: { type: String, default: null },
+    refundProcessedAt: { type: Date, default: null },
+    adminNotes: { type: String, default: null }
   },
   {
     timestamps: true,
@@ -90,5 +136,6 @@ const appointmentSchema = new mongoose.Schema(
 appointmentSchema.index({ patientId: 1, dateTime: 1 });
 appointmentSchema.index({ doctorId: 1, dateTime: 1 });
 appointmentSchema.index({ doctorId: 1, status: 1 });
+//appointmentSchema.index({ availabilityId: 1 }); // NEW index
 
 module.exports = mongoose.model("Appointment", appointmentSchema);

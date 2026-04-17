@@ -1,5 +1,6 @@
 const axios = require("axios");
 const mongoose = require("mongoose");
+const jwt = require("jsonwebtoken");
 const Doctor = require("../models/Doctor");
 const Availability = require("../models/Availability");
 const Prescription = require("../models/Prescription");
@@ -16,6 +17,19 @@ const NOTIFICATION_SERVICE_URL =
 const authHeader = (req) => ({
   Authorization: req.headers.authorization || "",
 });
+
+// Helper function to calculate total slots from time range and duration
+const calculateTotalSlots = (startTime, endTime, slotDuration) => {
+  const startMins = timeToMinutes(startTime);
+  const endMins = timeToMinutes(endTime);
+  const durationMins = endMins - startMins;
+  return Math.floor(durationMins / slotDuration);
+};
+
+const timeToMinutes = (timeStr) => {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  return hours * 60 + minutes;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROFILE
@@ -128,12 +142,16 @@ const addAvailability = async (req, res) => {
         .json({ success: false, message: "startTime and endTime are required" });
     }
 
+    const totalSlots = calculateTotalSlots(startTime, endTime, slotDuration || 30);
+
     const slot = new Availability({
       doctorId: req.doctor._id,
       dayOfWeek: dayOfWeek ?? null,
       specificDate: specificDate ? new Date(specificDate) : null,
       startTime,
       endTime,
+      totalSlots,
+      bookedSlots: 0,
       slotDuration: slotDuration || 30,
       isRecurring: isRecurring !== undefined ? isRecurring : true,
     });
@@ -206,6 +224,12 @@ const updateAvailability = async (req, res) => {
     updatable.forEach((f) => {
       if (req.body[f] !== undefined) slot[f] = req.body[f];
     });
+
+    if (req.body.startTime !== undefined ||
+      req.body.endTime !== undefined ||
+      req.body.slotDuration !== undefined) {
+      slot.totalSlots = calculateTotalSlots(slot.startTime, slot.endTime, slot.slotDuration);
+    }
 
     await slot.save();
     return res.status(200).json({ success: true, availability: slot });
@@ -416,6 +440,102 @@ const getPrescriptions = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/doctors/prescriptions/patient/:patientId
+ * Patient can fetch only their own prescriptions.
+ * Doctor/admin can fetch prescriptions for any patient.
+ */
+const getPrescriptionsByPatient = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    if (!patientId) {
+      return res.status(400).json({ success: false, message: "patientId is required" });
+    }
+
+    const auth = req.headers.authorization || "";
+    const token = auth.startsWith("Bearer ") ? auth.split(" ")[1] : "";
+    if (!token) {
+      return res.status(401).json({ success: false, message: "No token provided. Access denied." });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (_err) {
+      return res.status(401).json({ success: false, message: "Invalid or expired token." });
+    }
+
+    const requesterId = String(decoded.userId || decoded.id || decoded._id || "");
+    const requesterRole = decoded.role || "patient";
+
+    const isSamePatient = requesterRole === "patient" && requesterId === String(patientId);
+    const isPrivileged = requesterRole === "doctor" || requesterRole === "admin";
+
+    if (!isSamePatient && !isPrivileged) {
+      return res.status(403).json({ success: false, message: "Access denied." });
+    }
+
+    const prescriptions = await Prescription.find({ patientId }).sort({ issuedAt: -1 });
+    return res.status(200).json({ success: true, prescriptions });
+  } catch (error) {
+    console.error("getPrescriptionsByPatient error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * DELETE /api/doctors/prescriptions/:prescriptionId
+ * Patient may delete their own record; doctor may delete prescriptions they issued; admin may delete any.
+ */
+const deletePrescription = async (req, res) => {
+  try {
+    const { prescriptionId } = req.params;
+    if (!prescriptionId || !mongoose.Types.ObjectId.isValid(prescriptionId)) {
+      return res.status(400).json({ success: false, message: "Invalid prescription id" });
+    }
+
+    const auth = req.headers.authorization || "";
+    const token = auth.startsWith("Bearer ") ? auth.split(" ")[1] : "";
+    if (!token) {
+      return res.status(401).json({ success: false, message: "No token provided. Access denied." });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (_err) {
+      return res.status(401).json({ success: false, message: "Invalid or expired token." });
+    }
+
+    const prescription = await Prescription.findById(prescriptionId);
+    if (!prescription) {
+      return res.status(404).json({ success: false, message: "Prescription not found" });
+    }
+
+    const requesterId = String(decoded.userId || decoded.id || decoded._id || "");
+    const requesterRole = decoded.role || "patient";
+
+    let allowed = false;
+    if (requesterRole === "patient") {
+      allowed = String(prescription.patientId) === requesterId;
+    } else if (requesterRole === "doctor") {
+      allowed = String(prescription.doctorId) === requesterId;
+    } else if (requesterRole === "admin") {
+      allowed = true;
+    }
+
+    if (!allowed) {
+      return res.status(403).json({ success: false, message: "Access denied." });
+    }
+
+    await Prescription.deleteOne({ _id: prescription._id });
+    return res.status(200).json({ success: true, message: "Prescription deleted" });
+  } catch (error) {
+    console.error("deletePrescription error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PATIENTS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -595,13 +715,13 @@ const getPublicDoctorAvailability = async (req, res) => {
 
     if (req.query.date) {
       const targetDate = new Date(req.query.date);
-      const dayOfWeek  = targetDate.getDay();
+      const dayOfWeek = targetDate.getDay();
       query.$or = [
         { dayOfWeek, isRecurring: true },
         {
           specificDate: {
             $gte: new Date(req.query.date),
-            $lt:  new Date(new Date(req.query.date).setDate(targetDate.getDate() + 1)),
+            $lt: new Date(new Date(req.query.date).setDate(targetDate.getDate() + 1)),
           },
         },
       ];
@@ -630,6 +750,8 @@ module.exports = {
   completeAppointment,
   issuePrescription,
   getPrescriptions,
+  getPrescriptionsByPatient,
+  deletePrescription,
   getPatients,
   getPatientDetails,
   getDashboardStats,

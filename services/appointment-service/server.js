@@ -45,8 +45,8 @@ mongoose.connection.on("error", (err) => {
 });
 
 // ── RabbitMQ ───────────────────────────────────────────────────────────────────
-const { connectRabbitMQ } = require("./src/utils/rabbitmq");
-connectRabbitMQ();
+/*const { connectRabbitMQ } = require("./src/utils/rabbitmq");
+connectRabbitMQ();*/
 
 // ── Health Check ───────────────────────────────────────────────────────────────
 app.get("/health", (req, res) => {
@@ -60,6 +60,7 @@ app.get("/health", (req, res) => {
 });
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
+app.use("/api/appointments/manage", require("./src/routes/doctorAppointmentRouter"));
 app.use("/api/appointments", require("./src/routes/appointmentRouter-auth"));
 
 // ── Global Error Handler ───────────────────────────────────────────────────────

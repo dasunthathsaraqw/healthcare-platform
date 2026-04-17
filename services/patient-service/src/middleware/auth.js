@@ -16,8 +16,15 @@ const authenticate = async (req, res, next) => {
 
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || "your-secret-key",
+      process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this",
     );
+
+    // Bypass DB check for service-to-service calls (e.g., Doctor fetching patient details)
+    if (decoded.role === "doctor" || decoded.role === "admin") {
+      req.user = { _id: decoded.userId || decoded.id, role: decoded.role };
+      return next();
+    }
+
     const user = await User.findById(decoded.userId).select("-password");
 
     if (!user) {
@@ -35,6 +42,57 @@ const authenticate = async (req, res, next) => {
     }
 
     req.user = user;
+    next();
+  } catch (error) {
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid token. Please login again.",
+      });
+    }
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        success: false,
+        message: "Session expired. Please login again.",
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message: "Authentication error",
+      error: error.message,
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JWT-ONLY AUTH (no DB lookup)
+// Use this for cross-service endpoints where the caller's account lives in a
+// different service's database (e.g., doctors calling patient-service endpoints).
+// The role is trusted from the signed JWT payload itself.
+// ─────────────────────────────────────────────────────────────────────────────
+const authenticateJwtOnly = (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required. Please login.",
+      });
+    }
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this",
+    );
+
+    // Build a minimal req.user from token claims — no DB query needed
+    req.user = {
+      _id: decoded.userId,
+      id: decoded.userId,
+      role: decoded.role,
+    };
+
     next();
   } catch (error) {
     if (error.name === "JsonWebTokenError") {
@@ -125,6 +183,7 @@ const canAccessResource = (resourceUserIdField = "userId") => {
 
 module.exports = {
   authenticate,
+  authenticateJwtOnly,
   authorize,
   hasPermission,
   canAccessResource,

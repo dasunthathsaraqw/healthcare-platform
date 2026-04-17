@@ -47,6 +47,16 @@ const availabilitySchema = new mongoose.Schema(
       enum: ["available", "booked", "unavailable"],
       default: "available",
     },
+    totalSlots: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    bookedSlots: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   {
     timestamps: true,

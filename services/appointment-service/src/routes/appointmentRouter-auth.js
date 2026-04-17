@@ -13,6 +13,12 @@ const {
   updateAppointmentStatus,
   cancelAppointment,
   updateAppointmentPayment,
+  reserveSlot,
+  createAppointmentFromReservation,
+  getCancellationRequests,
+  processRefundRequest,
+  rejectCancellationRequest,
+  getCancellationHistory
 } = require("../controllers/appointmentController");
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,9 +54,10 @@ router.get("/patient/:id", authenticate, getAppointmentsByPatient);
 // SHARED CRUD ROUTES
 // ─────────────────────────────────────────────────────────────────────────────
 
-// POST /api/appointments                   ← Book appointment + publish RabbitMQ event
-router.post("/", authenticate, bookAppointment);
-
+// Replace the POST route
+router.post("/reserve", authenticate, reserveSlot);
+router.post("/create-from-reservation", authenticate, createAppointmentFromReservation);
+// Remove: router.post("/", authenticate, bookAppointment);
 // PATCH /api/appointments/:id/status       ← Doctor accept / reject / complete
 router.patch("/:id/status", authenticate, updateAppointmentStatus);
 
@@ -63,4 +70,19 @@ router.patch("/:id/payment", authenticate, updateAppointmentPayment);
 // GET  /api/appointments/:id               ← Single appointment lookup
 router.get("/:id", authenticate, getAppointmentById);
 
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN ROUTES (for managing cancellations/refunds)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/appointments/admin/cancellation-requests - Get all pending refund requests
+router.get("/admin/cancellation-requests", getCancellationRequests);
+
+// PUT /api/appointments/admin/cancellation-requests/:id/process - Mark refund as processed
+router.put("/admin/cancellation-requests/:id/process", processRefundRequest);
+
+// PUT /api/appointments/admin/cancellation-requests/:id/reject - Reject cancellation
+router.put("/admin/cancellation-requests/:id/reject", rejectCancellationRequest);
+router.get("/admin/cancellation-history", getCancellationHistory);
 module.exports = router;

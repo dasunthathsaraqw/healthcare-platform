@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const morgan = require("morgan");
+require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -33,6 +34,7 @@ const services = {
   notification:
     process.env.NOTIFICATION_SERVICE || "http://notification-service:3005",
   ai: process.env.AI_SYMPTOM_CHECKER || "http://ai-symptom-checker:3006",
+  telemedicine: process.env.TELEMEDICINE_SERVICE || "http://telemedicine-service:3008",
   // Admin routes are served by the doctor-service (it owns doctor verification)
   admin: process.env.ADMIN_SERVICE || process.env.DOCTOR_SERVICE || "http://doctor-service:3002",
 };
@@ -130,8 +132,20 @@ app.use(
   handleProxy(services.ai, "/api/symptom-checker"),
 );
 
+// AI Checker (alias used by the patient-side AI checker UI)
+app.use(
+  "/api/ai-checker",
+  handleProxy(services.ai, "/api/ai-checker"),
+);
+
 // Admin routes (doctor verification etc.) — proxied to doctor-service admin endpoints
 app.use("/api/admin", handleProxy(services.admin, "/api/admin"));
+
+// Telemedicine Service
+app.use(
+  "/api/telemedicine",
+  handleProxy(services.telemedicine, "/api/telemedicine"),
+);
 
 // ================= UTILITY ROUTES =================
 
