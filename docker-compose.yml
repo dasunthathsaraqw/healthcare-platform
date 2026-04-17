@@ -121,6 +121,7 @@ services:
       - PORT=3003
       - DB_URL=mongodb://appointment-db:27017/appointmentdb
       - JWT_SECRET=your-super-secret-jwt-key-change-this
+      - INTERNAL_SECRET=healthcare_internal_secret_2024
       - PATIENT_SERVICE_URL=http://patient-service:3001
       - DOCTOR_SERVICE_URL=http://doctor-service:3002
       - RABBITMQ_URL=amqp://rabbitmq:5672
@@ -142,6 +143,8 @@ services:
       - PORT=3004
       - DB_URL=mongodb://payment-db:27017/paymentdb
       - APPOINTMENT_SERVICE_URL=http://appointment-service:3003
+      - JWT_SECRET=your-super-secret-jwt-key-change-this
+      - INTERNAL_SECRET=healthcare_internal_secret_2024
       - NODE_ENV=development
     depends_on:
       - payment-db
@@ -186,11 +189,16 @@ services:
       - "3008:3008"
     environment:
       - PORT=3008
+      - MONGODB_URI=mongodb://telemedicine-db:27017/telemedicinedb
       - DB_URL=mongodb://telemedicine-db:27017/telemedicinedb
       - JWT_SECRET=your-super-secret-jwt-key-change-this
       - APPOINTMENT_SERVICE_URL=http://appointment-service:3003
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - NODE_ENV=development
+      - AGORA_APP_ID=a3130664ecfd48be930fe29cae4a64e0
+      - AGORA_APP_CERTIFICATE=8a7ce858b71a4e28a519e5150a00c23b
+      - AGORA_TOKEN_EXPIRY=3600
+      - FRONTEND_URL=http://localhost:3000
     depends_on:
       - telemedicine-db
       - appointment-service

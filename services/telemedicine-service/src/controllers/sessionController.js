@@ -5,7 +5,7 @@
 "use strict";
 
 const sessionService                              = require("../services/sessionService");
-const { getAppointmentById, verifyParticipant }   = require("../services/appointment.service");
+const { getAppointmentById } = require("../services/appointment.service");
 const { generateRtcToken, generateUidFromUserId } = require("../services/agora.service");
 const { publishNotificationEvent }                = require("../utils/rabbitmq");
 const { ApiError }                                = require("../utils/ApiError");
@@ -44,7 +44,9 @@ const createSession = async (req, res) => {
 
     // ── Fetch + validate appointment ──────────────────────────────────────────
     // getAppointmentById throws 404 if not found and 422 if not CONFIRMED.
-    const appointment = await getAppointmentById(appointmentId.trim());
+    const appointment = await getAppointmentById(appointmentId.trim(), {
+      authHeader: req.headers.authorization,
+    });
 
     // ── Create session ────────────────────────────────────────────────────────
     const session = await sessionService.createSession({
@@ -115,12 +117,58 @@ const joinSession = async (req, res) => {
     if (!appointmentId) throw ApiError.badRequest("appointmentId param is required.");
     if (!callerId)      throw ApiError.unauthorized("User ID missing from token.");
 
-    // ── Find session ──────────────────────────────────────────────────────────
-    const session = await sessionService.getSessionByAppointmentId(appointmentId);
+    // ── Find session (auto-create if not yet created) ───────────────────────
+    let session;
+    try {
+      session = await sessionService.getSessionByAppointmentId(appointmentId);
+    } catch (notFoundErr) {
+      if (notFoundErr.statusCode === 404 || notFoundErr.message.includes("No session found")) {
+        const appointment = await getAppointmentById(appointmentId.trim(), {
+          authHeader: req.headers.authorization,
+        });
+        session = await sessionService.createSession({
+          appointmentId: appointment.appointmentId,
+          patientId:     appointment.patientId,
+          doctorId:      appointment.doctorId,
+          patientName:   appointment.patientName,
+          doctorName:    appointment.doctorName,
+          specialty:     appointment.specialty,
+          scheduledAt:   appointment.scheduledAt,
+          createdBy:     callerId,
+        });
+      } else {
+        throw notFoundErr;
+      }
+    }
 
-    // ── Validate participant ───────────────────────────────────────────────────
-    const isParticipant =
-      session.patientId === callerId || session.doctorId === callerId;
+    // Use string comparison to handle ObjectId vs string mismatch
+    let isParticipant =
+      String(session.patientId) === String(callerId) ||
+      String(session.doctorId) === String(callerId);
+
+    // Repair sessions created earlier with mock participant ids (same appointmentId / channel).
+    if (!isParticipant && callerRole !== "admin") {
+      try {
+        const appt = await getAppointmentById(appointmentId.trim(), {
+          authHeader: req.headers.authorization,
+        });
+        const onAppointment =
+          String(appt.patientId) === String(callerId) ||
+          String(appt.doctorId) === String(callerId);
+        if (onAppointment) {
+          const updated = await sessionService.syncSessionParticipantsFromAppointment(
+            appointmentId.trim(),
+            appt
+          );
+          if (updated) {
+            session = updated;
+            isParticipant = true;
+          }
+        }
+      } catch (realignErr) {
+        console.warn("[joinSession] Session realign skipped:", realignErr.message);
+      }
+    }
 
     if (!isParticipant && callerRole !== "admin") {
       throw ApiError.forbidden("You are not a participant in this session.");
@@ -146,8 +194,8 @@ const joinSession = async (req, res) => {
 
     // ── Determine display role ────────────────────────────────────────────────
     const sessionRole =
-      session.doctorId === callerId ? "doctor" :
-      session.patientId === callerId ? "patient" : callerRole;
+      String(session.doctorId) === String(callerId) ? "doctor" :
+      String(session.patientId) === String(callerId) ? "patient" : callerRole;
 
     return res.status(200).json({
       success: true,

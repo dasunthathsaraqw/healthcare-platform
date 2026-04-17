@@ -178,7 +178,9 @@ exports.handleNotify = async (req, res) => {
               paymentStatus: "paid",
             },
             {
-              headers: { Authorization: `Bearer ${process.env.JWT_SECRET || "123"}` },
+              headers: {
+                Authorization: `Bearer ${process.env.INTERNAL_SECRET}`,
+              },
               timeout: 5000,
             }
           );

@@ -107,6 +107,7 @@ function AppointmentCard({ appt, onClick }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
+  const router = useRouter();
   const [cancelStep, setCancelStep] = useState("view");
   const [reason, setReason] = useState("");
   const [downloading, setDownloading] = useState(false);
@@ -125,10 +126,12 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const docName = appt.doctorName || "Doctor";
   const dt = appt.dateTime || appt.date;
 
-  const handleJoinMeeting = () => {
-    if (appt.meetingLink) {
-      window.open(appt.meetingLink, "_blank");
-    }
+  /** In-app video room (same as dashboard) — not external meetingLink */
+  const handleJoinVideoConsultation = () => {
+    const id = appt._id ?? appt.id;
+    if (!id) return;
+    onClose();
+    router.push(`/dashboard/consultation/${id}`);
   };
 
 
@@ -443,10 +446,12 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                   {downloading ? (<svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>) : (<><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download Receipt / Details</>)}
                 </button>
 
-                {/* Join Meeting */}
-                {status === "confirmed" && appt.meetingLink && (
-                  <button onClick={handleJoinMeeting} className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3">
+
+                {/* Join in-app video consultation */}
+                {status === "confirmed" && (
+                  <button onClick={handleJoinVideoConsultation} className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+
                     Join Video Consultation
                   </button>
                 )}

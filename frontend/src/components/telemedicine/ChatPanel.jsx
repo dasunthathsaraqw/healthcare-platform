@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const rawApiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const normalizedApiBase = rawApiBase.replace(/\/+$/, "");
+const API_BASE = /\/api$/i.test(normalizedApiBase) ? normalizedApiBase : `${normalizedApiBase}/api`;
 const POLL_INTERVAL = 3000; // Poll every 3 seconds
 
 function authHeaders() {
@@ -20,6 +22,11 @@ function getUser() {
 
 function fmtTime(d) {
   return new Date(d).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+}
+
+function idsEqual(a, b) {
+  if (a === undefined || a === null || b === undefined || b === null) return false;
+  return String(a) === String(b);
 }
 
 export default function ChatPanel({ appointmentId, otherPartyName = "Doctor", className = "" }) {
@@ -116,8 +123,8 @@ export default function ChatPanel({ appointmentId, otherPartyName = "Doctor", cl
     }
   };
 
-  const myId = user?.id || user?._id;
-  const isMe = (msg) => msg.senderId === myId || msg.senderId === user?.id;
+  const myId = user?.id || user?._id || user?.userId;
+  const isMe = (msg) => idsEqual(msg.senderId, myId);
 
   return (
     <div className={`flex flex-col bg-white ${className}`}>
