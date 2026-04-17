@@ -118,6 +118,10 @@ export default function DoctorLayout({ children }) {
   const isActive = (href) =>
     pathname === href || pathname.startsWith(href + "/");
 
+  if (pathname === "/doctor/login" || pathname === "/doctor/register") {
+    return <>{children}</>;
+  }
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* ── Mobile overlay ───────────────────────────────────────────────────── */}
