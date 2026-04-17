@@ -5,6 +5,8 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const aiCheckerRoutes = require("./routes/aiCheckerRoutes");
+const prescriptionSuggestionRoutes = require("./routes/prescriptionSuggestionRoutes");
+
 
 const app = express();
 
@@ -37,6 +39,7 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+
 app.get("/", (req, res) => {
   res.status(200).json({
     status: "OK",
@@ -54,6 +57,8 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/ai-checker", aiCheckerRoutes);
+app.use("/api/ai-checker/prescription", prescriptionSuggestionRoutes);
+
 
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err.message);

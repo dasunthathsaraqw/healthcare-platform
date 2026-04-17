@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import axios from "axios";
+import AIPrescriptionSuggestions from "@/app/doctor/components/AIPrescriptionSuggestions"
+
 
 const API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
 const PAGE_SIZE = 10;
@@ -68,11 +70,30 @@ function NewPrescriptionModal({ open, patient, onClose, onSuccess }) {
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState(null);
+
 
   const addMed = () => setRx((p) => ({ ...p, medications: [...p.medications, { ...BLANK_MED }] }));
   const delMed = (i) => setRx((p) => ({ ...p, medications: p.medications.filter((_, idx) => idx !== i) }));
   const chgMed = (i, field, val) =>
     setRx((p) => ({ ...p, medications: p.medications.map((m, idx) => idx === i ? { ...m, [field]: val } : m) }));
+
+  const handleApplySuggestion = (suggestion) => {
+    if (suggestion.type === "medication") {
+      setRx((prev) => ({
+        ...prev,
+        medications: [...prev.medications, suggestion.data],
+      }));
+    } else if (suggestion.type === "diagnosis") {
+      setRx((prev) => ({
+        ...prev,
+        diagnosis: prev.diagnosis
+          ? `${prev.diagnosis}\n\nSuggested: ${suggestion.data}`
+          : `Suggested: ${suggestion.data}`,
+      }));
+    }
+  };
 
   const resetForm = () => {
     setRx({
@@ -128,6 +149,18 @@ function NewPrescriptionModal({ open, patient, onClose, onSuccess }) {
             <p className="text-base font-bold text-gray-900">New Prescription</p>
             <p className="text-xs text-gray-500">for {patient.name}</p>
           </div>
+          <button
+            onClick={() => setShowAIPanel(!showAIPanel)}
+            className={`p-2 rounded-lg transition-colors ${showAIPanel
+              ? "bg-indigo-100 text-indigo-600"
+              : "hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              }`}
+            title="AI Assistant"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </button>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -234,6 +267,13 @@ function NewPrescriptionModal({ open, patient, onClose, onSuccess }) {
           </button>
         </div>
       </div>
+      <AIPrescriptionSuggestions
+        isOpen={showAIPanel}
+        onClose={() => setShowAIPanel(false)}
+        patient={patient}
+        currentPrescriptionData={rx}
+        onSuggestionApply={handleApplySuggestion}
+      />
     </div>,
     document.body
   );
