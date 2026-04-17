@@ -692,6 +692,158 @@ function AppointmentCard({ appt, onAccept, onReject, onViewDetails, actionLoadin
 // SKELETON CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// METRIC CARD (for Health Metrics display)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MetricCard({ type, entries }) {
+  if (!entries || entries.length === 0) return null;
+
+  const latest = entries[0]; // Most recent entry
+  const typeLabels = {
+    blood_pressure: { label: "Blood Pressure", unit: "mmHg", icon: "❤️" },
+    weight: { label: "Weight", unit: "kg", icon: "⚖️" },
+    heart_rate: { label: "Heart Rate", unit: "bpm", icon: "💓" },
+    temperature: { label: "Temperature", unit: "°C", icon: "🌡️" },
+    blood_sugar: { label: "Blood Sugar", unit: "mg/dL", icon: "🩸" },
+    oxygen_saturation: { label: "Oxygen Saturation", unit: "%", icon: "💨" },
+  };
+
+  const config = typeLabels[type] || { label: type, unit: "", icon: "📊" };
+
+  const formatValue = () => {
+    if (type === "blood_pressure" && latest.value) {
+      if (typeof latest.value === "object") {
+        return `${latest.value.systolic || latest.value.systolicBP}/${latest.value.diastolic || latest.value.diastolicBP}`;
+      }
+      return latest.value;
+    }
+    return latest.value;
+  };
+
+  const getStatusColor = () => {
+    if (type === "blood_pressure") {
+      const systolic = latest.value?.systolic || latest.value?.systolicBP;
+      const diastolic = latest.value?.diastolic || latest.value?.diastolicBP;
+      if (!systolic || !diastolic) return "text-gray-600";
+      if (systolic < 120 && diastolic < 80) return "text-green-600";
+      if (systolic >= 140 || diastolic >= 90) return "text-red-600";
+      return "text-amber-600";
+    }
+
+    if (type === "heart_rate") {
+      const rate = latest.value;
+      if (rate >= 60 && rate <= 100) return "text-green-600";
+      return "text-amber-600";
+    }
+
+    if (type === "oxygen_saturation") {
+      const sat = latest.value;
+      if (sat >= 95) return "text-green-600";
+      if (sat >= 90) return "text-amber-600";
+      return "text-red-600";
+    }
+
+    return "text-gray-600";
+  };
+
+  const getTrendIndicator = () => {
+    if (entries.length < 2) return null;
+
+    const current = type === "blood_pressure"
+      ? (latest.value?.systolic || 0)
+      : latest.value;
+    const previous = type === "blood_pressure"
+      ? (entries[1]?.value?.systolic || 0)
+      : entries[1]?.value;
+
+    if (!current || !previous) return null;
+
+    const diff = current - previous;
+    if (Math.abs(diff) < 0.1) return null;
+
+    const isIncrease = diff > 0;
+    const isGood = (type === "heart_rate" && diff < 0) ||
+      (type === "blood_pressure" && diff < 0) ||
+      (type === "oxygen_saturation" && diff > 0);
+
+    return (
+      <span className={`text-[10px] font-semibold ml-1 ${isGood ? "text-green-500" : "text-red-500"}`}>
+        {isIncrease ? "↑" : "↓"} {Math.abs(diff).toFixed(1)}
+      </span>
+    );
+  };
+
+  const formattedDate = latest.recordedAt
+    ? new Date(latest.recordedAt).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    })
+    : "Recently";
+
+  return (
+    <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200 p-4 hover:shadow-md transition-all duration-200">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">{config.icon}</span>
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{config.label}</p>
+            <p className="text-xs text-gray-400">{entries.length} reading{entries.length !== 1 ? "s" : ""}</p>
+          </div>
+        </div>
+        {entries.length > 1 && (
+          <div className="flex items-center gap-1">
+            <div className="flex -space-x-1">
+              {entries.slice(0, 3).map((_, idx) => (
+                <div key={idx} className="w-1.5 h-1.5 rounded-full bg-blue-400 ring-1 ring-white" />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-baseline gap-1 flex-wrap">
+        <span className={`text-xl font-bold ${getStatusColor()}`}>
+          {formatValue()}
+        </span>
+        <span className="text-xs text-gray-400">{config.unit}</span>
+        {getTrendIndicator()}
+      </div>
+
+      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+        <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p className="text-[10px] text-gray-400">{formattedDate}</p>
+
+        {latest.source && (
+          <>
+            <span className="w-1 h-1 rounded-full bg-gray-300" />
+            <p className="text-[10px] text-gray-400 capitalize">via {latest.source}</p>
+          </>
+        )}
+      </div>
+
+      {/* Normal range indicator */}
+      <div className="mt-2">
+        <div className="flex justify-between text-[9px] text-gray-300 mb-0.5">
+          <span>Low</span>
+          <span>Normal</span>
+          <span>High</span>
+        </div>
+        <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-full w-1/3 bg-green-400/30 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
 function SkeletonCard() {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3 animate-pulse">
