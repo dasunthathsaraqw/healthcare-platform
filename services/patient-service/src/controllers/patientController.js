@@ -8,6 +8,9 @@ const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs').promises;
 
+const NOTIFICATION_SERVICE_URL =
+  process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:3005';
+
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const errorResponse = (res, statusCode, message) =>
@@ -298,6 +301,30 @@ exports.getPatientDashboard = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // EXPORT USER DATA (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
+exports.getMyNotifications = async (req, res) => {
+  try {
+    const limit = Number.parseInt(req.query.limit, 10);
+    const response = await axios.get(`${NOTIFICATION_SERVICE_URL}/api/notifications/patient`, {
+      params: {
+        patientId: req.user._id?.toString(),
+        email: req.user.email,
+        ...(Number.isInteger(limit) && limit > 0 ? { limit } : {}),
+      },
+      headers: { Authorization: req.headers.authorization },
+      timeout: 5000,
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: response.data.count || 0,
+      notifications: response.data.notifications || [],
+    });
+  } catch (error) {
+    console.error('Fetch Patient Notifications Error:', error.message);
+    return errorResponse(res, 500, 'Failed to fetch notifications.');
+  }
+};
+
 exports.exportUserData = async (req, res) => {
   try {
     const userId = req.user._id || req.user.userId;

@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const preferencesController = require('../controllers/preferencesController');
+const patientNotificationsController = require("../controllers/patientNotificationsController");
 
 // ── JWT verification middleware (lightweight — notification-service has no User model) ──
 const jwt = require('jsonwebtoken');
@@ -27,6 +28,8 @@ router.get('/preferences', preferencesController.getPreferences);
 
 // PUT  /api/notifications/preferences — toggle email/sms, event preferences, quiet hours
 router.put('/preferences', preferencesController.updatePreferences);
+
+router.get('/patient', patientNotificationsController.getPatientNotifications);
 
 // Keep the original placeholder route
 router.get("/", (req, res) => {

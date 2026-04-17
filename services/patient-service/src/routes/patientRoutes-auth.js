@@ -81,6 +81,12 @@ router.get(
   patientController.getPatientDashboard
 );
 
+router.get(
+  '/notifications',
+  authorize(ROLES.PATIENT),
+  patientController.getMyNotifications
+);
+
 // Export Data
 router.get(
   '/export',
