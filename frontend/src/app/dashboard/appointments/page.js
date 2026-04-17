@@ -635,10 +635,10 @@ export default function AppointmentsPage() {
 
         {/* Filter Tabs */}
         <div className="flex gap-1 sm:gap-2 border-b border-gray-200 pb-2 overflow-x-auto">
-          <button onClick={() => setFilter("all")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "all" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-gray-500 hover:text-gray-700"}`}>All Appointments</button>
-          <button onClick={() => setFilter("upcoming")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "upcoming" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-gray-500 hover:text-gray-700"}`}>Upcoming</button>
-          <button onClick={() => setFilter("today")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "today" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-gray-500 hover:text-gray-700"}`}>Today</button>
-          <button onClick={() => setFilter("past")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "past" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-gray-500 hover:text-gray-700"}`}>Past & Cancelled</button>
+          <button onClick={() => setFilter("all")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "all" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-black hover:text-gray-700"}`}>All Appointments</button>
+          <button onClick={() => setFilter("upcoming")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "upcoming" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-black hover:text-gray-700"}`}>Upcoming</button>
+          <button onClick={() => setFilter("today")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "today" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-black hover:text-gray-700"}`}>Today</button>
+          <button onClick={() => setFilter("past")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "past" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-black hover:text-gray-700"}`}>Past & Cancelled</button>
         </div>
 
         {/* Appointments List */}

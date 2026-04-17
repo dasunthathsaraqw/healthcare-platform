@@ -759,12 +759,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook, lockedSlots, onLock
                               <span className="text-xs font-semibold text-gray-700">
                                 {slot.startTime} – {slot.endTime} ({slot.slotDuration || 30} min)
                               </span>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full ${(slot.totalSlots || timeSlots.length) - bookedCount > 0
-                                  ? "bg-green-100 text-green-600"
-                                  : "bg-red-100 text-red-500"
-                                }`}>
-                                {Math.max(0, (slot.totalSlots || timeSlots.length) - bookedCount)}/{slot.totalSlots || timeSlots.length} available
-                              </span>
+                              
                             </div>
                             <div className="grid grid-cols-3 gap-2">
                               {timeSlots.map((time, idx) => {
