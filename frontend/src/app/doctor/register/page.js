@@ -114,7 +114,7 @@ function useTypingText(text, active) {
     const type = () => {
       if (i <= text.length) {
         setDisplayed(text.slice(0, i));
-        i++;/
+        i++;
         rafRef.current = setTimeout(type, 60);
       }
     };
