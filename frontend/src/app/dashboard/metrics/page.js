@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect, useCallback } from "react";
 import api from "@/services/api";
 
@@ -33,6 +35,8 @@ export default function HealthMetricsPage() {
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState("");
   const [success, setSuccess] = useState("");
+  const [activeType, setActiveType] = useState("blood_pressure");
+  const [days, setDays] = useState(30);
 
   const activeConfig = METRIC_TYPES.find((t) => t.key === activeType);
 

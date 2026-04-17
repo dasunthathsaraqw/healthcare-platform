@@ -94,7 +94,6 @@ app.post('/test-upload', upload.single('document'), async (req, res) => {
 const authRoutes = require("./src/routes/authRoutes");
 app.use("/api/auth", authRoutes);
 
-const patientRoutes = require("./src/routes/patientRoutes-auth");
 // Doctor-facing: read-only patient data (profile, metrics, reports)
 // IMPORTANT: Must be registered BEFORE patientRoutes which has a wildcard /:id
 const doctorViewRoutes = require('./src/routes/doctorViewRoutes');
