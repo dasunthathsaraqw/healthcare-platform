@@ -19,11 +19,231 @@ function getInitials(name = "") {
   return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
 }
 
+const BLANK_MED = { name: "", dosage: "", frequency: "", duration: "", instructions: "" };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MEDICATION ROW (for prescription form)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MedicationRow({ med, idx, onChange, onDelete }) {
+  const input = (field, placeholder, cls = "col-span-1") => (
+    <input
+      type="text"
+      placeholder={placeholder}
+      value={med[field]}
+      onChange={(e) => onChange(idx, field, e.target.value)}
+      className={`${cls} px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-800 placeholder-gray-400
+        focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white transition`}
+    />
+  );
+  return (
+    <div className="relative bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">Med #{idx + 1}</span>
+        <button onClick={() => onDelete(idx)} className="p-1 rounded-lg hover:bg-red-100 text-red-400 hover:text-red-600 transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {input("name", "Medication name", "col-span-2")}
+        {input("dosage", "Dosage (e.g. 500mg)")}
+        {input("frequency", "Frequency (twice daily)")}
+        {input("duration", "Duration (7 days)")}
+        {input("instructions", "Instructions (after meals)", "col-span-2")}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW PRESCRIPTION MODAL (for creating prescriptions for a patient)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function NewPrescriptionModal({ open, patient, onClose, onSuccess }) {
+  const [rx, setRx] = useState({
+    diagnosis: "",
+    medications: [],
+    notes: "",
+    followUpDate: "",
+  });
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const addMed = () => setRx((p) => ({ ...p, medications: [...p.medications, { ...BLANK_MED }] }));
+  const delMed = (i) => setRx((p) => ({ ...p, medications: p.medications.filter((_, idx) => idx !== i) }));
+  const chgMed = (i, field, val) =>
+    setRx((p) => ({ ...p, medications: p.medications.map((m, idx) => idx === i ? { ...m, [field]: val } : m) }));
+
+  const resetForm = () => {
+    setRx({
+      diagnosis: "",
+      medications: [],
+      notes: "",
+      followUpDate: "",
+    });
+    setErrors({});
+  };
+
+  useEffect(() => {
+    if (open) resetForm();
+  }, [open]);
+
+  const handleSubmit = async () => {
+    const errs = {};
+    if (!rx.diagnosis.trim()) errs.diagnosis = "Diagnosis is required";
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    setSaving(true);
+    try {
+      await axios.post(`${API_BASE}/doctors/prescriptions`, {
+        patientId: patient._id,
+        diagnosis: rx.diagnosis,
+        medications: rx.medications,
+        notes: rx.notes,
+        followUpDate: rx.followUpDate || undefined,
+      }, { headers: authHeaders() });
+
+      onSuccess();
+      onClose();
+    } catch (err) {
+      setErrors({ submit: err.response?.data?.message || "Failed to create prescription" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open || !patient || typeof window === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-[scaleIn_.2s_ease-out]">
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-cyan-50 shrink-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-sm shrink-0">
+            {getInitials(patient.name)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-bold text-gray-900">New Prescription</p>
+            <p className="text-xs text-gray-500">for {patient.name}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {errors.submit && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+              {errors.submit}
+            </div>
+          )}
+
+          {/* Diagnosis */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+              Diagnosis <span className="text-red-400">*</span>
+            </label>
+            <textarea
+              rows={3}
+              value={rx.diagnosis}
+              onChange={(e) => { setRx((p) => ({ ...p, diagnosis: e.target.value })); setErrors((p) => ({ ...p, diagnosis: "" })); }}
+              placeholder="Primary diagnosis and observations…"
+              className={`w-full px-3 py-2.5 rounded-xl border text-sm text-gray-800 placeholder-gray-400 resize-none
+                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition
+                ${errors.diagnosis ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+            />
+            {errors.diagnosis && <p className="text-xs text-red-500 mt-1">{errors.diagnosis}</p>}
+          </div>
+
+          {/* Medications */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                Medications ({rx.medications.length})
+              </label>
+              <button onClick={addMed}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors shadow-sm">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                Add Medication
+              </button>
+            </div>
+            {rx.medications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+                <p className="text-xs text-gray-400">No medications added yet</p>
+                <button onClick={addMed} className="text-xs text-blue-500 hover:text-blue-600 font-medium mt-1">+ Add one</button>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {rx.medications.map((med, i) => (
+                  <MedicationRow key={i} med={med} idx={i} onChange={chgMed} onDelete={delMed} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+              Additional Notes
+            </label>
+            <textarea
+              rows={2}
+              value={rx.notes}
+              onChange={(e) => setRx((p) => ({ ...p, notes: e.target.value }))}
+              placeholder="Rest recommendations, lifestyle advice…"
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 placeholder-gray-400
+                resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition"
+            />
+          </div>
+
+          {/* Follow-up date */}
+          <div>
+            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+              Follow-up Date <span className="text-gray-300">(optional)</span>
+            </label>
+            <input
+              type="date"
+              value={rx.followUpDate}
+              min={new Date().toISOString().split("T")[0]}
+              onChange={(e) => setRx((p) => ({ ...p, followUpDate: e.target.value }))}
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700
+                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 transition"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors">
+            Cancel
+          </button>
+          <button onClick={handleSubmit} disabled={saving}
+            className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold
+              disabled:opacity-60 transition-colors shadow-md shadow-blue-200 flex items-center justify-center gap-2">
+            {saving ? (
+              <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Saving…</>
+            ) : (
+              <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Issue Prescription</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PATIENT PRESCRIPTIONS MODAL (shows all prescriptions for a patient)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PatientPrescriptionsModal({ open, patient, prescriptions, onClose }) {
+function PatientPrescriptionsModal({ open, patient, prescriptions, onClose, onNewPrescription }) {
   const [selectedRx, setSelectedRx] = useState(null);
 
   if (!open || !patient || typeof window === "undefined") return null;
@@ -34,7 +254,6 @@ function PatientPrescriptionsModal({ open, patient, prescriptions, onClose }) {
 
   return (
     <>
-      {/* Prescription detail modal (reused) */}
       <PrescriptionDetailModal
         open={!!selectedRx}
         rx={selectedRx}
@@ -58,18 +277,35 @@ function PatientPrescriptionsModal({ open, patient, prescriptions, onClose }) {
                   Last issued: {fmtDate(sortedPrescriptions[0]?.issuedAt)}
                 </p>
               </div>
-              <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onNewPrescription(patient)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-sm"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  New Prescription
+                </button>
+                <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* Prescriptions list */}
             <div className="flex-1 overflow-y-auto p-6">
               {sortedPrescriptions.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-400">No prescriptions found for this patient</p>
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <p className="text-gray-500 font-medium">No prescriptions yet</p>
+                  <p className="text-sm text-gray-400 mt-1">Click "New Prescription" to create one</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -295,13 +531,12 @@ function PrescriptionDetailModal({ open, rx, onClose }) {
 // PATIENT GROUP CARD (for grouped view)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PatientGroupCard({ patient, prescriptions, onViewAll }) {
+function PatientGroupCard({ patient, prescriptions, onViewAll, onNewPrescription }) {
   const latestPrescription = prescriptions[0]; // Most recent
   const prescriptionCount = prescriptions.length;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 hover:shadow-md transition-all cursor-pointer"
-      onClick={() => onViewAll(patient, prescriptions)}>
+    <div className="bg-white rounded-xl border border-gray-200 hover:shadow-md transition-all">
       <div className="p-5">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -321,7 +556,7 @@ function PatientGroupCard({ patient, prescriptions, onViewAll }) {
         </div>
 
         {/* Latest prescription preview */}
-        <div className="space-y-2">
+        <div className="space-y-2 cursor-pointer" onClick={() => onViewAll(patient, prescriptions)}>
           <div className="flex items-start gap-2">
             <span className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Latest Dx:</span>
             <p className="text-sm text-gray-700 line-clamp-2 flex-1">{latestPrescription.diagnosis}</p>
@@ -349,9 +584,18 @@ function PatientGroupCard({ patient, prescriptions, onViewAll }) {
           )}
         </div>
 
-        <div className="mt-4 pt-3 border-t border-gray-100">
-          <button className="w-full py-2 rounded-lg text-blue-600 text-xs font-semibold hover:bg-blue-50 transition-colors">
-            View All Prescriptions →
+        <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+          <button
+            onClick={() => onViewAll(patient, prescriptions)}
+            className="flex-1 py-2 rounded-lg text-blue-600 text-xs font-semibold hover:bg-blue-50 transition-colors"
+          >
+            View All →
+          </button>
+          <button
+            onClick={() => onNewPrescription(patient)}
+            className="flex-1 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            + New Rx
           </button>
         </div>
       </div>
@@ -422,6 +666,8 @@ export default function PrescriptionsPage() {
   const [viewMode, setViewMode] = useState("grouped"); // "grouped" or "list"
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [selectedPatientPrescriptions, setSelectedPatientPrescriptions] = useState([]);
+  const [showNewPrescriptionModal, setShowNewPrescriptionModal] = useState(false);
+  const [selectedPatientForRx, setSelectedPatientForRx] = useState(null);
 
   const fetchPrescriptions = useCallback(async () => {
     setLoading(true);
@@ -480,13 +726,33 @@ export default function PrescriptionsPage() {
     setSelectedPatientPrescriptions(prescriptions);
   };
 
+  const handleNewPrescription = (patient) => {
+    setSelectedPatientForRx(patient);
+    setShowNewPrescriptionModal(true);
+  };
+
+  const handlePrescriptionCreated = async () => {
+    await fetchPrescriptions();
+  };
+
   return (
     <>
+      <NewPrescriptionModal
+        open={showNewPrescriptionModal}
+        patient={selectedPatientForRx}
+        onClose={() => {
+          setShowNewPrescriptionModal(false);
+          setSelectedPatientForRx(null);
+        }}
+        onSuccess={handlePrescriptionCreated}
+      />
+
       <PatientPrescriptionsModal
         open={!!selectedPatient}
         patient={selectedPatient}
         prescriptions={selectedPatientPrescriptions}
         onClose={() => setSelectedPatient(null)}
+        onNewPrescription={handleNewPrescription}
       />
 
       <div className="max-w-6xl mx-auto space-y-5">
@@ -582,6 +848,7 @@ export default function PrescriptionsPage() {
                     patient={group.patient}
                     prescriptions={group.prescriptions}
                     onViewAll={handleViewPatientPrescriptions}
+                    onNewPrescription={handleNewPrescription}
                   />
                 ))}
               </div>
@@ -614,7 +881,7 @@ export default function PrescriptionsPage() {
                   </div>
                 ))}
               </div>
-            ) : paginatedGroups.length === 0 ? (
+            ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center text-2xl mb-3">📋</div>
                 <p className="text-sm font-semibold text-gray-700">No prescriptions found</p>
@@ -658,23 +925,15 @@ export default function PrescriptionsPage() {
                         )}
                       </div>
                       {/* Actions */}
-                      <div className="col-span-1 flex justify-end">
-                        <button onClick={() => {
-                          // Show single prescription detail
-                          const modal = document.createElement('div');
-                          const PrescriptionDetail = () => {
-                            const [show, setShow] = useState(true);
-                            return <PrescriptionDetailModal open={show} rx={rx} onClose={() => setShow(false)} />;
-                          };
-                          // For simplicity, we'll use a ref or re-render approach
-                          // Actually, let's just open the patient view for single
-                          handleViewPatientPrescriptions(
+                      <div className="col-span-1 flex justify-end gap-1">
+                        <button
+                          onClick={() => handleViewPatientPrescriptions(
                             { _id: rx.patientId?._id || rx.patientId, name: patientName },
                             [rx]
-                          );
-                        }}
+                          )}
                           className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold
-                            hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 transition-all group-hover:border-blue-200">
+                            hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 transition-all"
+                        >
                           View
                         </button>
                       </div>
