@@ -162,9 +162,9 @@ export default function AdminNotificationsPage() {
                       value="all"
                       checked={formData.recipientType === "all"}
                       onChange={(e) => handleInputChange("recipientType", e.target.value)}
-                      className="mr-2"
+                      className="mr-2 text-gray-900"
                     />
-                    <span className="text-sm">All Patients</span>
+                    <span className="text-sm text-gray-900">All Patients</span>
                   </label>
                   <label className="flex items-center">
                     <input
@@ -173,9 +173,9 @@ export default function AdminNotificationsPage() {
                       value="specific"
                       checked={formData.recipientType === "specific"}
                       onChange={(e) => handleInputChange("recipientType", e.target.value)}
-                      className="mr-2"
+                      className="mr-2 text-gray-900"
                     />
-                    <span className="text-sm">Specific Patient</span>
+                    <span className="text-sm text-gray-900">Specific Patient</span>
                   </label>
                 </div>
                 
@@ -183,7 +183,7 @@ export default function AdminNotificationsPage() {
                   <select
                     value={formData.recipientId}
                     onChange={(e) => handleInputChange("recipientId", e.target.value)}
-                    className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   >
                     <option value="">Select a patient...</option>
@@ -203,7 +203,7 @@ export default function AdminNotificationsPage() {
                   type="text"
                   value={formData.subject}
                   onChange={(e) => handleInputChange("subject", e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Notification subject"
                   required
                 />
@@ -216,7 +216,7 @@ export default function AdminNotificationsPage() {
                   value={formData.message}
                   onChange={(e) => handleInputChange("message", e.target.value)}
                   rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Your message to the patients..."
                   required
                 />
@@ -231,18 +231,18 @@ export default function AdminNotificationsPage() {
                       type="checkbox"
                       checked={formData.sendEmail}
                       onChange={(e) => handleInputChange("sendEmail", e.target.checked)}
-                      className="mr-2"
+                      className="mr-2 text-gray-900"
                     />
-                    <span className="text-sm">Email</span>
+                    <span className="text-sm text-gray-900">Email</span>
                   </label>
                   <label className="flex items-center">
                     <input
                       type="checkbox"
                       checked={formData.sendSMS}
                       onChange={(e) => handleInputChange("sendSMS", e.target.checked)}
-                      className="mr-2"
+                      className="mr-2 text-gray-900"
                     />
-                    <span className="text-sm">SMS</span>
+                    <span className="text-sm text-gray-900">SMS</span>
                   </label>
                 </div>
               </div>

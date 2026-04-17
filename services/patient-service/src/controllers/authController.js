@@ -135,9 +135,22 @@ exports.login = async (req, res) => {
 
 exports.getCurrentUser = async (req, res) => {
   try {
+    let userProfile;
+    
+    // If req.user is a plain object (due to DB bypass in auth middleware for admins/doctors)
+    if (typeof req.user.getPublicProfile !== "function") {
+      const fullUser = await User.findById(req.user._id);
+      if (!fullUser) {
+        return errorResponse(res, 404, "User account not found.");
+      }
+      userProfile = fullUser.getPublicProfile();
+    } else {
+      userProfile = req.user.getPublicProfile();
+    }
+
     return res.status(200).json({
       success: true,
-      user: req.user.getPublicProfile(),
+      user: userProfile,
     });
   } catch (error) {
     console.error("❌ getCurrentUser error:", error);

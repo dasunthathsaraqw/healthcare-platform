@@ -1,29 +1,45 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import axios from "axios";
+import { useEffect, useState } from "react";
+import jsPDF from "jspdf";
+import api from "@/services/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
-
-function authHeaders() {
-  const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
-  return { Authorization: `Bearer ${t}` };
+function addWrappedText(doc, text, x, y, maxWidth, lineHeight = 6) {
+  const lines = doc.splitTextToSize(text || "None", maxWidth);
+  lines.forEach((line) => {
+    doc.text(line, x, y);
+    y += lineHeight;
+  });
+  return y;
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+function addSectionTitle(doc, title, y) {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text(title, 14, y);
+  doc.setDrawColor(226, 232, 240);
+  doc.line(14, y + 2, 196, y + 2);
+  return y + 10;
+}
+
+function ensurePage(doc, y, minSpace = 20) {
+  if (y <= 277 - minSpace) return y;
+  doc.addPage();
+  return 20;
+}
 
 export default function PrivacyPage() {
-  const [user, setUser]               = useState(null);
-  const [downloading, setDownloading] = useState(false);
-  const [downloaded, setDownloaded]   = useState(false);
+  const [user, setUser] = useState(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingJson, setDownloadingJson] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
 
-  // Password change
-  const [currentPw, setCurrentPw]   = useState("");
-  const [newPw, setNewPw]           = useState("");
-  const [confirmPw, setConfirmPw]   = useState("");
-  const [pwError, setPwError]       = useState("");
-  const [pwSuccess, setPwSuccess]   = useState("");
-  const [pwSaving, setPwSaving]     = useState(false);
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
 
   useEffect(() => {
     try {
@@ -32,36 +48,152 @@ export default function PrivacyPage() {
     } catch {}
   }, []);
 
-  // ── Download My Data ───────────────────────────────────────────────────────
+  const downloadBlob = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
-  const handleExport = async () => {
-    setDownloading(true);
-    try {
-      const res = await axios.get(`${API_BASE}/patients/export`, {
-        headers: authHeaders(),
+  const fetchExportData = async () => {
+    const res = await api.get("/patients/export");
+    return res.data;
+  };
+
+  const generatePdf = (payload) => {
+    const doc = new jsPDF();
+    const profile = payload.user || {};
+    const reports = payload.reports || [];
+    const metrics = payload.metrics || [];
+    const medicalHistory = profile.medicalHistory || [];
+
+    let y = 20;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text("Patient Data Export", 14, y);
+    y += 8;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Generated on ${new Date(payload.exportDate || Date.now()).toLocaleString()}`, 14, y);
+    y += 12;
+    doc.setTextColor(17, 24, 39);
+
+    y = addSectionTitle(doc, "Profile", y);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    [
+      `Name: ${profile.name || "N/A"}`,
+      `Email: ${profile.email || "N/A"}`,
+      `Phone: ${profile.phone || "Not set"}`,
+      `Role: ${profile.role || "patient"}`,
+      `Address: ${profile.address || "Not set"}`,
+      `Date of Birth: ${profile.dateOfBirth ? new Date(profile.dateOfBirth).toLocaleDateString() : "Not set"}`,
+    ].forEach((line) => {
+      y = ensurePage(doc, y);
+      doc.text(line, 14, y);
+      y += 7;
+    });
+
+    y = ensurePage(doc, y, 35);
+    y = addSectionTitle(doc, "Medical History", y);
+    if (medicalHistory.length === 0) {
+      doc.setFont("helvetica", "normal");
+      doc.text("No medical history entries recorded.", 14, y);
+      y += 8;
+    } else {
+      medicalHistory.forEach((item) => {
+        y = ensurePage(doc, y);
+        doc.text(`• ${item}`, 16, y);
+        y += 7;
       });
+    }
 
-      // Trigger file download
-      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `patient-data-export-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+    y = ensurePage(doc, y, 40);
+    y = addSectionTitle(doc, "Medical Reports", y);
+    if (reports.length === 0) {
+      doc.text("No uploaded reports found.", 14, y);
+      y += 8;
+    } else {
+      reports.forEach((report, index) => {
+        y = ensurePage(doc, y, 30);
+        doc.setFont("helvetica", "bold");
+        doc.text(`${index + 1}. ${report.title || "Untitled Report"}`, 14, y);
+        y += 6;
+        doc.setFont("helvetica", "normal");
+        y = addWrappedText(
+          doc,
+          `Type: ${report.documentType || "General"} | Uploaded: ${report.createdAt ? new Date(report.createdAt).toLocaleString() : "Unknown"}`,
+          16,
+          y,
+          176,
+          5
+        );
+        y = addWrappedText(doc, `File URL: ${report.fileUrl || "Unavailable"}`, 16, y, 176, 5);
+        y += 3;
+      });
+    }
 
+    y = ensurePage(doc, y, 40);
+    y = addSectionTitle(doc, "Health Metrics", y);
+    if (metrics.length === 0) {
+      doc.text("No health metrics found.", 14, y);
+    } else {
+      metrics.forEach((metric, index) => {
+        y = ensurePage(doc, y, 24);
+        doc.setFont("helvetica", "bold");
+        doc.text(`${index + 1}. ${metric.metricType || "Metric"}`, 14, y);
+        y += 6;
+        doc.setFont("helvetica", "normal");
+        y = addWrappedText(
+          doc,
+          `Value: ${metric.value ?? "N/A"} ${metric.unit || ""} | Recorded: ${metric.recordedAt ? new Date(metric.recordedAt).toLocaleString() : "Unknown"}`,
+          16,
+          y,
+          176,
+          5
+        );
+        if (metric.notes) {
+          y = addWrappedText(doc, `Notes: ${metric.notes}`, 16, y, 176, 5);
+        }
+        y += 3;
+      });
+    }
+
+    doc.save(`patient-data-export-${Date.now()}.pdf`);
+  };
+
+  const handleExportPdf = async () => {
+    setDownloadingPdf(true);
+    try {
+      const exportData = await fetchExportData();
+      generatePdf(exportData);
       setDownloaded(true);
       setTimeout(() => setDownloaded(false), 5000);
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to export data. Please try again.");
+      alert(err.response?.data?.message || "Failed to export data as PDF. Please try again.");
     } finally {
-      setDownloading(false);
+      setDownloadingPdf(false);
     }
   };
 
-  // ── Change Password ────────────────────────────────────────────────────────
+  const handleExportJson = async () => {
+    setDownloadingJson(true);
+    try {
+      const exportData = await fetchExportData();
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      downloadBlob(blob, `patient-data-export-${Date.now()}.json`);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to export JSON data. Please try again.");
+    } finally {
+      setDownloadingJson(false);
+    }
+  };
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
@@ -69,24 +201,29 @@ export default function PrivacyPage() {
     setPwSuccess("");
 
     if (!currentPw || !newPw || !confirmPw) {
-      setPwError("All fields are required."); return;
+      setPwError("All fields are required.");
+      return;
     }
     if (newPw.length < 6) {
-      setPwError("New password must be at least 6 characters."); return;
+      setPwError("New password must be at least 6 characters.");
+      return;
     }
     if (newPw !== confirmPw) {
-      setPwError("Passwords do not match."); return;
+      setPwError("Passwords do not match.");
+      return;
     }
 
     setPwSaving(true);
     try {
-      await axios.put(`${API_BASE}/auth/change-password`, {
+      await api.put("/auth/change-password", {
         currentPassword: currentPw,
         newPassword: newPw,
-      }, { headers: authHeaders() });
+      });
 
       setPwSuccess("Password changed successfully!");
-      setCurrentPw(""); setNewPw(""); setConfirmPw("");
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
       setTimeout(() => setPwSuccess(""), 4000);
     } catch (err) {
       setPwError(err.response?.data?.message || "Failed to change password.");
@@ -97,78 +234,60 @@ export default function PrivacyPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Data Export & Privacy</h1>
         <p className="text-sm text-gray-500 mt-1">Download your data, manage your security settings, and control your account.</p>
       </div>
 
-      {/* ── Data Export Card ────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-2xl shrink-0">
-            📦
+            PDF
           </div>
           <div className="flex-1">
             <h2 className="text-base font-bold text-gray-900">Download My Data</h2>
             <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-              Export a complete copy of your personal data, including your profile, medical history,
-              uploaded reports, and health metrics. The file is in JSON format, compliant with GDPR data portability requirements.
+              Export your profile, medical history, uploaded reports, and health metrics as a readable PDF.
+              A raw JSON export is also available if you need the machine-readable version.
             </p>
 
             <div className="mt-4 flex items-center gap-3 flex-wrap">
               <button
-                onClick={handleExport}
-                disabled={downloading}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold
-                  hover:bg-blue-700 disabled:opacity-50 transition-all duration-200 shadow-sm"
+                onClick={handleExportPdf}
+                disabled={downloadingPdf}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-all duration-200 shadow-sm"
               >
-                {downloading ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                    </svg>
-                    Preparing...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Download My Data
-                  </>
-                )}
+                {downloadingPdf ? "Preparing PDF..." : "Download PDF"}
               </button>
-
-              {downloaded && (
-                <span className="text-xs text-green-600 font-semibold flex items-center gap-1">
-                  ✅ Export downloaded!
-                </span>
-              )}
+              <button
+                onClick={handleExportJson}
+                disabled={downloadingJson}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-bold hover:bg-gray-50 disabled:opacity-50 transition-all duration-200"
+              >
+                {downloadingJson ? "Preparing JSON..." : "Download JSON"}
+              </button>
+              {downloaded && <span className="text-xs text-green-600 font-semibold">Export downloaded successfully.</span>}
             </div>
 
-            {/* What's included */}
             <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">What&apos;s included in your export</p>
               <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                <span className="flex items-center gap-1.5">✓ Personal profile</span>
-                <span className="flex items-center gap-1.5">✓ Medical history</span>
-                <span className="flex items-center gap-1.5">✓ Uploaded reports</span>
-                <span className="flex items-center gap-1.5">✓ Health metrics</span>
-                <span className="flex items-center gap-1.5">✓ Account metadata</span>
-                <span className="flex items-center gap-1.5">✓ GDPR format</span>
+                <span>Personal profile</span>
+                <span>Medical history</span>
+                <span>Uploaded reports</span>
+                <span>Health metrics</span>
+                <span>Account metadata</span>
+                <span>Portable PDF + JSON</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Change Password Card ───────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-2xl shrink-0">
-            🔒
+            Key
           </div>
           <div className="flex-1">
             <h2 className="text-base font-bold text-gray-900">Change Password</h2>
@@ -177,29 +296,43 @@ export default function PrivacyPage() {
             <form onSubmit={handlePasswordChange} className="mt-4 space-y-3 max-w-sm">
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Current Password</label>
-                <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)}
+                <input
+                  type="password"
+                  value={currentPw}
+                  onChange={(e) => setCurrentPw(e.target.value)}
                   placeholder="Enter current password"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200"
+                />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">New Password</label>
-                <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)}
+                <input
+                  type="password"
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
                   placeholder="Min. 6 characters"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200"
+                />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Confirm New Password</label>
-                <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)}
+                <input
+                  type="password"
+                  value={confirmPw}
+                  onChange={(e) => setConfirmPw(e.target.value)}
                   placeholder="Re-enter new password"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200" />
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all duration-200"
+                />
               </div>
 
               {pwError && <p className="text-xs text-red-500 font-medium">{pwError}</p>}
-              {pwSuccess && <p className="text-xs text-green-600 font-medium">✅ {pwSuccess}</p>}
+              {pwSuccess && <p className="text-xs text-green-600 font-medium">{pwSuccess}</p>}
 
-              <button type="submit" disabled={pwSaving}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-bold
-                  hover:bg-amber-700 disabled:opacity-50 transition-all duration-200 shadow-sm">
+              <button
+                type="submit"
+                disabled={pwSaving}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-bold hover:bg-amber-700 disabled:opacity-50 transition-all duration-200 shadow-sm"
+              >
                 {pwSaving ? "Saving..." : "Update Password"}
               </button>
             </form>
@@ -207,18 +340,15 @@ export default function PrivacyPage() {
         </div>
       </div>
 
-      {/* ── Account Info Card ──────────────────────────────────────────────── */}
       {user && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h2 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-            <span className="text-lg">👤</span> Account Information
-          </h2>
+          <h2 className="text-sm font-bold text-gray-900 mb-3">Account Information</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               { label: "Name", value: user.name },
               { label: "Email", value: user.email },
               { label: "Phone", value: user.phone || "Not set" },
-              { label: "Role", value: (user.role || "patient").charAt(0).toUpperCase() + (user.role || "patient").slice(1) },
+              { label: "Role", value: `${(user.role || "patient").charAt(0).toUpperCase()}${(user.role || "patient").slice(1)}` },
             ].map(({ label, value }) => (
               <div key={label} className="bg-gray-50 rounded-xl p-3 border border-gray-200">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{label}</p>
@@ -229,11 +359,8 @@ export default function PrivacyPage() {
         </div>
       )}
 
-      {/* ── Danger Zone ────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-6">
-        <h2 className="text-sm font-bold text-red-600 mb-1 flex items-center gap-2">
-          <span className="text-lg">⚠️</span> Danger Zone
-        </h2>
+        <h2 className="text-sm font-bold text-red-600 mb-1">Danger Zone</h2>
         <p className="text-xs text-gray-500 mb-4">Irreversible actions that permanently affect your account.</p>
         <button
           onClick={() => alert("Account deletion would require admin approval. This feature is planned for a future release.")}

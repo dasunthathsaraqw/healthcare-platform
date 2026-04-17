@@ -20,6 +20,7 @@ const {
   rejectCancellationRequest,
   getCancellationHistory
 } = require("../controllers/appointmentController");
+const { getAdminStats } = require("../controllers/adminStatsController");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC / INTERNAL ROUTES (no auth, called by other services internally)
@@ -85,4 +86,5 @@ router.put("/admin/cancellation-requests/:id/process", processRefundRequest);
 // PUT /api/appointments/admin/cancellation-requests/:id/reject - Reject cancellation
 router.put("/admin/cancellation-requests/:id/reject", rejectCancellationRequest);
 router.get("/admin/cancellation-history", getCancellationHistory);
+router.get("/admin/stats", authenticate, getAdminStats);
 module.exports = router;

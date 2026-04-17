@@ -4,6 +4,7 @@ const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const NotificationLog = require('../models/NotificationLog');
 const AdminNotificationLog = require('../models/AdminNotificationLog');
+const NotificationPreference = require('../models/NotificationPreference');
 
 // ─── Module-level references for graceful shutdown ────────────────────────────
 let connection = null;
@@ -13,12 +14,101 @@ let channel = null;
 const MAIN_QUEUE = 'notification_queue';
 const DLQ_QUEUE  = 'notification_dead_letter_queue';
 const DLX_EXCHANGE = 'notification_dlx'; // Dead Letter Exchange
+const EVENT_PREFERENCE_MAP = {
+  REPORT_UPLOADED: 'REPORT_UPLOADED',
+  APPOINTMENT_BOOKED: 'APPOINTMENT_BOOKED',
+  APPOINTMENT_CANCELLED: 'APPOINTMENT_CANCELLED',
+  PRESCRIPTION_ISSUED: 'PRESCRIPTION_ISSUED',
+  SYSTEM_ALERT: 'SYSTEM_ALERT',
+  ADMIN_NOTIFICATION: 'SYSTEM_ALERT',
+};
 
 /**
  * Get the currently open channel (used by server.js for graceful shutdown).
  */
 const getChannel = () => channel;
 const getConnection = () => connection;
+
+const parseMinutes = (time) => {
+  if (!time || typeof time !== 'string' || !time.includes(':')) return null;
+  const [hours, minutes] = time.split(':').map((value) => Number.parseInt(value, 10));
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+  return (hours * 60) + minutes;
+};
+
+const isWithinQuietHours = (prefs) => {
+  const start = parseMinutes(prefs?.quietHoursStart);
+  const end = parseMinutes(prefs?.quietHoursEnd);
+
+  if (start === null || end === null || start === end) return false;
+
+  const now = new Date();
+  const current = (now.getHours() * 60) + now.getMinutes();
+
+  if (start < end) return current >= start && current < end;
+  return current >= start || current < end;
+};
+
+const getNotificationPreferences = async (recipientId) => {
+  if (!recipientId) return null;
+
+  try {
+    let prefs = await NotificationPreference.findOne({ recipientId });
+    if (!prefs) {
+      prefs = await NotificationPreference.create({ recipientId });
+    }
+    return prefs;
+  } catch (error) {
+    console.warn('⚠️  Could not load notification preferences:', error.message);
+    return null;
+  }
+};
+
+const resolveAllowedChannels = ({
+  prefs,
+  eventName,
+  patientEmail,
+  patientPhone,
+  requestedEmail = true,
+  requestedSMS = false,
+}) => {
+  const preferenceKey = EVENT_PREFERENCE_MAP[eventName] || 'SYSTEM_ALERT';
+  const eventEnabled = prefs?.eventPreferences?.[preferenceKey];
+  const quietHoursActive = isWithinQuietHours(prefs);
+
+  if (eventEnabled === false || quietHoursActive) {
+    return {
+      email: false,
+      sms: false,
+      reason: quietHoursActive ? 'Suppressed during quiet hours.' : `Event ${preferenceKey} disabled by user preferences.`,
+    };
+  }
+
+  return {
+    email: Boolean(requestedEmail && patientEmail && (prefs?.emailEnabled ?? true)),
+    sms: Boolean(requestedSMS && patientPhone && (prefs?.smsEnabled ?? false)),
+    reason: null,
+  };
+};
+
+const inferLogType = ({ email, sms }) => {
+  if (email && sms) return 'BOTH';
+  if (sms) return 'SMS';
+  return 'EMAIL';
+};
+
+const buildSmsMessage = (eventName, data) => {
+  switch (eventName) {
+    case 'REPORT_UPLOADED':
+      return `Smart Healthcare: Your report "${data.reportTitle || 'medical report'}" was uploaded successfully.`;
+    case 'APPOINTMENT_BOOKED':
+      return `Smart Healthcare: Your appointment with ${data.doctorName || 'your doctor'} is confirmed.`;
+    case 'ADMIN_NOTIFICATION':
+      return `Admin Message: ${data.subject} - ${data.message}`;
+    default:
+      return `Smart Healthcare: You have a new ${eventName.replace(/_/g, ' ').toLowerCase()} notification.`;
+  }
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSUME NOTIFICATIONS
@@ -28,6 +118,15 @@ const getConnection = () => connection;
 
 const handleAdminNotification = async (data) => {
   const { patientId, patientEmail, patientPhone, patientName, subject, message, sendEmail, sendSMS, adminId } = data;
+  const prefs = await getNotificationPreferences(patientId);
+  const allowedChannels = resolveAllowedChannels({
+    prefs,
+    eventName: 'ADMIN_NOTIFICATION',
+    patientEmail,
+    patientPhone,
+    requestedEmail: sendEmail,
+    requestedSMS: sendSMS,
+  });
 
   // Create admin notification log
   const adminLog = await AdminNotificationLog.create({
@@ -40,19 +139,21 @@ const handleAdminNotification = async (data) => {
   });
 
   try {
-    // Send email if requested
-    if (sendEmail && patientEmail) {
+    if (allowedChannels.email) {
       await emailService.sendAdminNotificationEmail(data);
       adminLog.deliveryMethods.push('EMAIL');
     }
 
-    // Send SMS if requested
-    if (sendSMS && patientPhone) {
-      await smsService.sendSMS(patientPhone, `Admin Message: ${subject} - ${message}`);
+    if (allowedChannels.sms) {
+      await smsService.sendSMS(patientPhone, buildSmsMessage('ADMIN_NOTIFICATION', data));
       adminLog.deliveryMethods.push('SMS');
     }
 
-    // Update log as successful
+    if (!allowedChannels.email && !allowedChannels.sms) {
+      adminLog.errorMessage = allowedChannels.reason || 'No permitted delivery channels available.';
+      console.log(`ℹ️  Admin notification skipped for ${patientName}: ${adminLog.errorMessage}`);
+    }
+
     adminLog.status = 'SENT';
     await adminLog.save();
 
@@ -119,12 +220,21 @@ const consumeNotifications = async () => {
 
       // Create a pending log entry so failures are always tracked
       let log;
+      const prefs = await getNotificationPreferences(payload.data?.patientId);
+      const allowedChannels = resolveAllowedChannels({
+        prefs,
+        eventName: payload.event,
+        patientEmail: payload.data?.patientEmail,
+        patientPhone: payload.data?.patientPhone,
+        requestedEmail: payload.event === 'ADMIN_NOTIFICATION' ? Boolean(payload.data?.sendEmail) : true,
+        requestedSMS: payload.event === 'ADMIN_NOTIFICATION' ? Boolean(payload.data?.sendSMS) : true,
+      });
       try {
         log = await NotificationLog.create({
           recipientId: payload.data?.patientId || 'unknown',
           recipientEmail: payload.data?.patientEmail || '',
           recipientPhone: payload.data?.patientPhone || '',
-          type: 'EMAIL',
+          type: inferLogType(allowedChannels),
           eventTrigger: payload.event,
           status: 'PENDING',
         });
@@ -136,11 +246,21 @@ const consumeNotifications = async () => {
         // ── 5. Route the event to the correct handler ──────────────────────
         switch (payload.event) {
           case 'REPORT_UPLOADED':
-            await emailService.sendReportUploadEmail(payload.data);
+            if (allowedChannels.email) {
+              await emailService.sendReportUploadEmail(payload.data);
+            }
+            if (allowedChannels.sms) {
+              await smsService.sendSMS(payload.data.patientPhone, buildSmsMessage(payload.event, payload.data));
+            }
             break;
 
           case 'APPOINTMENT_BOOKED':
-            await emailService.sendAppointmentBookedEmail(payload.data);
+            if (allowedChannels.email) {
+              await emailService.sendAppointmentBookedEmail(payload.data);
+            }
+            if (allowedChannels.sms) {
+              await smsService.sendSMS(payload.data.patientPhone, buildSmsMessage(payload.event, payload.data));
+            }
             break;
 
           case 'ADMIN_NOTIFICATION':
@@ -155,6 +275,13 @@ const consumeNotifications = async () => {
         }
 
         // ── 6. Success: update log and ack ────────────────────────────────
+        if (!allowedChannels.email && !allowedChannels.sms && payload.event !== 'ADMIN_NOTIFICATION' && log) {
+          await log.updateOne({
+            errorMessage: allowedChannels.reason || 'No permitted delivery channels available.',
+          });
+          console.log(`â„¹ï¸  Notification [${payload.event}] skipped: ${allowedChannels.reason}`);
+        }
+
         if (log) await log.updateOne({ status: 'SENT' });
         channel.ack(msg);
         console.log(`✅ Event [${payload.event}] processed successfully.`);

@@ -1,118 +1,237 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import api from "@/services/api";
+
+function SkeletonCard() {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 animate-pulse">
+      <div className="h-4 w-28 bg-gray-100 rounded" />
+      <div className="h-8 w-20 bg-gray-200 rounded mt-3" />
+      <div className="h-3 w-32 bg-gray-100 rounded mt-3" />
+    </div>
+  );
+}
+
+function formatCurrency(amount) {
+  return `Rs. ${Number(amount || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
 
 export default function AdminProfilePage() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [profile, setProfile] = useState(null);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    appointmentsToday: 0,
+    revenueMonth: 0,
+    activeServices: 0,
+  });
+  const [services, setServices] = useState({});
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem("user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setUser(parsed);
-        if (parsed.role !== "admin") {
-          router.replace("/dashboard");
-        }
-      } else {
+      if (!stored) {
         router.push("/login");
+        return;
       }
-    } catch (_) {}
+
+      const parsed = JSON.parse(stored);
+      if (parsed.role !== "admin") {
+        router.replace("/dashboard");
+        return;
+      }
+    } catch (_error) {
+      router.push("/login");
+      return;
+    }
+
+    const loadPage = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const [profileRes, usersRes, appointmentsRes, paymentsRes, healthRes] = await Promise.all([
+          api.get("/auth/me"),
+          api.get("/patients/admin/users", { params: { limit: 1 } }),
+          api.get("/appointments/admin/stats"),
+          api.get("/payments/admin/all"),
+          api.get("/system/health"),
+        ]);
+
+        const adminProfile = profileRes.data.user;
+        const userCount = usersRes.data.count || usersRes.data.total || usersRes.data.users?.length || 0;
+        const appointmentStats = appointmentsRes.data.stats || {};
+        const payments = paymentsRes.data.payments || [];
+        const serviceHealth = healthRes.data.services || {};
+
+        const now = new Date();
+        const revenueMonth = payments
+          .filter((payment) => {
+            if (!payment?.createdAt) return false;
+            const createdAt = new Date(payment.createdAt);
+            return (
+              createdAt.getFullYear() === now.getFullYear() &&
+              createdAt.getMonth() === now.getMonth() &&
+              (payment.status === "completed" || payment.status === "refunded" || payment.status === "pending")
+            );
+          })
+          .reduce((sum, payment) => sum + (payment.amount || 0), 0);
+
+        const activeServices = Object.values(serviceHealth).filter((service) => service.ok).length;
+
+        setProfile(adminProfile);
+        setServices(serviceHealth);
+        setStats({
+          totalUsers: userCount,
+          appointmentsToday: appointmentStats.appointmentsToday || 0,
+          revenueMonth,
+          activeServices,
+        });
+      } catch (err) {
+        console.error("Failed to load admin profile:", err);
+        setError(err.response?.data?.message || "Could not load the admin overview.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPage();
   }, [router]);
 
-  if (!user) {
+  const serviceEntries = useMemo(() => Object.entries(services), [services]);
+
+  if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <svg className="w-8 h-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 w-72 bg-gray-200 rounded" />
+          <div className="h-4 w-96 bg-gray-100 rounded mt-2" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((item) => (
+            <SkeletonCard key={item} />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 animate-pulse h-72" />
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 animate-pulse h-72" />
+        </div>
       </div>
     );
   }
 
-  const statCards = [
-    { label: "Total Platform Users", value: "1,248", trend: "+12% this month", icon: "👥", color: "text-blue-600", bg: "bg-blue-50" },
-    { label: "Active Doctors", value: "84", trend: "+3 new this week", icon: "👨‍⚕️", color: "text-emerald-600", bg: "bg-emerald-50" },
-    { label: "Daily Transactions", value: "$4,290", trend: "+8% vs yesterday", icon: "💳", color: "text-indigo-600", bg: "bg-indigo-50" },
-    { label: "System Uptime", value: "99.99%", trend: "Last 30 days", icon: "⚡", color: "text-amber-600", bg: "bg-amber-50" },
-  ];
-
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Admin Profile & System Overview</h1>
-        <p className="text-sm text-gray-500 mt-1">Manage your administrative credentials and view global platform health.</p>
+        <p className="text-sm text-gray-500 mt-1">
+          Monitor your admin account details, platform activity, and service health in one place.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((stat, idx) => (
-          <div key={idx} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${stat.bg}`}>
-                {stat.icon}
-              </div>
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${stat.bg} ${stat.color}`}>
-                Live
-              </span>
-            </div>
-            <p className="text-sm font-semibold text-gray-500">{stat.label}</p>
-            <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value}</p>
-            <p className="text-xs text-gray-400 mt-2 font-medium">{stat.trend}</p>
-          </div>
-        ))}
+      {error && (
+        <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs font-semibold text-gray-500">Total Users</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalUsers}</p>
+          <p className="text-xs text-gray-400 mt-2">Across all patient, doctor, and admin accounts</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs font-semibold text-gray-500">Appointments Today</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.appointmentsToday}</p>
+          <p className="text-xs text-gray-400 mt-2">Today&apos;s active appointment schedule</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs font-semibold text-gray-500">Revenue This Month</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{formatCurrency(stats.revenueMonth)}</p>
+          <p className="text-xs text-gray-400 mt-2">Calculated from current monthly payment records</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs font-semibold text-gray-500">System Health</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">
+            {stats.activeServices}/{serviceEntries.length || 0}
+          </p>
+          <p className="text-xs text-gray-400 mt-2">Core services responding to health checks</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Admin Credential Card */}
-        <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white">
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <span className="text-2xl">🛡️</span> Security Clearance
-            </h2>
-            <p className="text-slate-300 text-xs mt-1">Level 4 Platform Administrator</p>
+            <h2 className="text-lg font-bold">Admin Credentials</h2>
+            <p className="text-slate-300 text-xs mt-1">Live account information from the auth service</p>
           </div>
           <div className="p-6 space-y-4">
+            {[
+              { label: "Name", value: profile?.name || "Unavailable" },
+              { label: "Email", value: profile?.email || "Unavailable" },
+              { label: "Role", value: profile?.role ? `${profile.role.charAt(0).toUpperCase()}${profile.role.slice(1)}` : "Unavailable" },
+              { label: "Phone", value: profile?.phone || "Not set" },
+            ].map((item) => (
+              <div key={item.label}>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{item.label}</p>
+                <p className="text-sm font-bold text-gray-900 mt-1 break-words">{item.value}</p>
+              </div>
+            ))}
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Administrator Name</p>
-              <p className="text-sm font-bold text-gray-900 mt-1">{user.name}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Primary Email</p>
-              <p className="text-sm font-bold text-gray-900 mt-1">{user.email}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Account Status</p>
-              <span className="inline-flex items-center mt-1 px-2.5 py-1 rounded-md text-xs font-bold bg-green-50 text-green-700 border border-green-200">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5 animate-pulse"></span>
-                Active
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Status</p>
+              <span className={`inline-flex items-center mt-1 px-2.5 py-1 rounded-md text-xs font-bold border ${
+                profile?.isActive === false
+                  ? "bg-red-50 text-red-700 border-red-200"
+                  : "bg-green-50 text-green-700 border-green-200"
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${profile?.isActive === false ? "bg-red-500" : "bg-green-500"}`} />
+                {profile?.isActive === false ? "Inactive" : "Active"}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Global Activity Graph Mock */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-sm font-bold text-gray-900">Platform Traffic (7 Days)</h2>
-            <select className="px-3 py-1.5 rounded-lg text-xs outline-none border border-gray-200 bg-gray-50 text-gray-700">
-              <option>Bandwidth</option>
-              <option>Requests</option>
-            </select>
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Service Health</h2>
+              <p className="text-xs text-gray-500 mt-1">Current status from the gateway&apos;s aggregated health checks</p>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-3 py-2 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+            >
+              Refresh
+            </button>
           </div>
-          <div className="h-48 flex items-end justify-between gap-2 px-2">
-            {[40, 65, 45, 80, 55, 90, 75].map((height, i) => (
-              <div key={i} className="w-full relative group">
-                <div 
-                  className="bg-blue-100 hover:bg-blue-500 rounded-t-lg transition-all duration-300 w-full"
-                  style={{ height: `${height}%` }}
-                ></div>
-                <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-gray-400">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {serviceEntries.map(([serviceName, service]) => (
+              <div key={serviceName} className="rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900 capitalize">{serviceName}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {service.details?.service || "Service check"}
+                    </p>
+                  </div>
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                    service.ok ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                  }`}>
+                    {service.ok ? "Healthy" : "Down"}
+                  </span>
                 </div>
+                <p className="text-xs text-gray-400 mt-3">
+                  HTTP {service.status || "N/A"}
+                </p>
               </div>
             ))}
           </div>

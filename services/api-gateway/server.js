@@ -102,6 +102,53 @@ const handleProxy = (targetUrl, routeName) => (req, res) => {
   proxyReq.end();
 };
 
+const fetchJson = (target) =>
+  new Promise((resolve) => {
+    const url = new URL(target);
+    const request = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname + url.search,
+        method: "GET",
+        timeout: 4000,
+      },
+      (response) => {
+        let data = "";
+        response.on("data", (chunk) => {
+          data += chunk;
+        });
+        response.on("end", () => {
+          try {
+            resolve({
+              ok: response.statusCode >= 200 && response.statusCode < 300,
+              status: response.statusCode,
+              body: data ? JSON.parse(data) : {},
+            });
+          } catch (_error) {
+            resolve({
+              ok: false,
+              status: response.statusCode,
+              body: { message: "Invalid JSON response" },
+            });
+          }
+        });
+      }
+    );
+
+    request.on("timeout", () => {
+      request.destroy(new Error("Request timed out"));
+    });
+    request.on("error", (error) => {
+      resolve({
+        ok: false,
+        status: 500,
+        body: { message: error.message },
+      });
+    });
+    request.end();
+  });
+
 // ================= ROUTE MAPPINGS =================
 
 // Auth & Patients (Both go to Patient Service)
@@ -146,6 +193,37 @@ app.use(
   "/api/telemedicine",
   handleProxy(services.telemedicine, "/api/telemedicine"),
 );
+
+app.get("/api/system/health", async (_req, res) => {
+  const healthTargets = {
+    patient: services.patient,
+    doctor: services.doctor,
+    appointment: services.appointment,
+    payment: services.payment,
+    notification: services.notification,
+    telemedicine: services.telemedicine,
+    ai: services.ai,
+  };
+
+  const entries = await Promise.all(
+    Object.entries(healthTargets).map(async ([serviceName, baseUrl]) => {
+      const response = await fetchJson(`${baseUrl}/health`);
+      return [
+        serviceName,
+        {
+          ok: response.ok,
+          status: response.status,
+          details: response.body,
+        },
+      ];
+    })
+  );
+
+  res.status(200).json({
+    success: true,
+    services: Object.fromEntries(entries),
+  });
+});
 
 // ================= UTILITY ROUTES =================
 
