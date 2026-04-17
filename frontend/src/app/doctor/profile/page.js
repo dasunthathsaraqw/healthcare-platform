@@ -91,8 +91,8 @@ function InlineToast({ msg, type }) {
       ${type === "success" ? "bg-green-50 border border-green-200 text-green-700"
         : "bg-red-50 border border-red-200 text-red-700"}`}>
       {type === "success"
-        ? <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-        : <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/></svg>
+        ? <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+        : <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
       }
       {msg}
     </div>
@@ -123,9 +123,10 @@ export default function ProfilePage() {
   const fileRef = useRef(null);
 
   // Profile state
-  const [loading, setLoading]     = useState(true);
-  const [saving,  setSaving]      = useState(false);
-  const [toast,   setToast]       = useState({ msg: "", type: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploadingPic, setUploadingPic] = useState(false);
+  const [toast, setToast] = useState({ msg: "", type: "" });
 
   const [profile, setProfile] = useState({
     name: "", email: "", phone: "", specialty: "",
@@ -135,10 +136,10 @@ export default function ProfilePage() {
   });
 
   // Password state
-  const [pwForm, setPwForm]     = useState({ current: "", next: "", confirm: "" });
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
   const [pwErrors, setPwErrors] = useState({});
   const [pwSaving, setPwSaving] = useState(false);
-  const [pwToast,  setPwToast]  = useState({ msg: "", type: "" });
+  const [pwToast, setPwToast] = useState({ msg: "", type: "" });
 
   // ── Load profile ───────────────────────────────────────────────────────────
   const fetchProfile = useCallback(async () => {
@@ -147,19 +148,19 @@ export default function ProfilePage() {
       const { data } = await axios.get(`${API_BASE}/doctors/profile`, { headers: authHeaders() });
       const d = data.doctor || data;
       setProfile({
-        name:            d.name            || "",
-        email:           d.email           || "",
-        phone:           d.phone           || "",
-        specialty:       d.specialty       || "",
-        qualifications:  d.qualifications  || [],
-        experience:      d.experience      ?? "",
+        name: d.name || "",
+        email: d.email || "",
+        phone: d.phone || "",
+        specialty: d.specialty || "",
+        qualifications: d.qualifications || [],
+        experience: d.experience ?? "",
         consultationFee: d.consultationFee ?? "",
-        clinicAddress:   d.clinicAddress   || "",
-        bio:             d.bio             || "",
-        languages:       d.languages       || [],
-        profilePicture:  d.profilePicture  || "",
-        isVerified:      d.isVerified      || false,
-        isActive:        d.isActive        !== false,
+        clinicAddress: d.clinicAddress || "",
+        bio: d.bio || "",
+        languages: d.languages || [],
+        profilePicture: d.profilePicture || "",
+        isVerified: d.isVerified || false,
+        isActive: d.isActive !== false,
       });
       // Update localStorage with fresh data
       localStorage.setItem("user", JSON.stringify(d));
@@ -179,20 +180,94 @@ export default function ProfilePage() {
     setTimeout(() => setToast({ msg: "", type: "" }), 4000);
   };
 
+  // ── Upload Profile Picture to Cloudinary ─────────────────────────────────
+  const uploadProfilePicture = async (file) => {
+    setUploadingPic(true);
+
+    const formData = new FormData();
+    formData.append("profilePicture", file);
+
+    try {
+      const { data } = await axios.post(
+        `${API_BASE}/doctors/upload-profile-picture`,
+        formData,
+        {
+          headers: {
+            ...authHeaders(),
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      const pictureUrl = data.profilePicture;
+      setProfile((p) => ({ ...p, profilePicture: pictureUrl }));
+
+      // Update localStorage
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        user.profilePicture = pictureUrl;
+        localStorage.setItem("user", JSON.stringify(user));
+      }
+
+      showToast("Profile picture updated successfully!", "success");
+      return pictureUrl;
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to upload profile picture", "error");
+      throw err;
+    } finally {
+      setUploadingPic(false);
+    }
+  };
+
+  // ── Profile picture handler ─────────────────────────────────
+  const handlePicChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "image/gif"];
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Only JPG, PNG, and GIF images are allowed", "error");
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      showToast("File size must be less than 2MB", "error");
+      return;
+    }
+
+    // Show preview immediately
+    const previewUrl = URL.createObjectURL(file);
+    setProfile((p) => ({ ...p, profilePicture: previewUrl }));
+
+    // Upload to server
+    try {
+      await uploadProfilePicture(file);
+    } catch (error) {
+      // Revert preview on error
+      await fetchProfile(); // Reload original profile picture
+    } finally {
+      // Clean up preview URL
+      URL.revokeObjectURL(previewUrl);
+    }
+  };
+
   // ── Save profile ───────────────────────────────────────────────────────────
   const handleSave = async () => {
     setSaving(true);
     try {
       const { data } = await axios.put(`${API_BASE}/doctors/profile`, {
-        name:            profile.name,
-        phone:           profile.phone,
-        specialty:       profile.specialty,
-        qualifications:  profile.qualifications,
-        experience:      Number(profile.experience) || 0,
+        name: profile.name,
+        phone: profile.phone,
+        specialty: profile.specialty,
+        qualifications: profile.qualifications,
+        experience: Number(profile.experience) || 0,
         consultationFee: Number(profile.consultationFee) || 0,
-        clinicAddress:   profile.clinicAddress,
-        bio:             profile.bio,
-        languages:       profile.languages,
+        clinicAddress: profile.clinicAddress,
+        bio: profile.bio,
+        languages: profile.languages,
       }, { headers: authHeaders() });
 
       const updated = data.doctor || data;
@@ -208,10 +283,10 @@ export default function ProfilePage() {
   // ── Change password ────────────────────────────────────────────────────────
   const handlePasswordChange = async () => {
     const errs = {};
-    if (!pwForm.current)  errs.current  = "Current password required";
-    if (!pwForm.next)     errs.next     = "New password required";
+    if (!pwForm.current) errs.current = "Current password required";
+    if (!pwForm.next) errs.next = "New password required";
     else if (pwForm.next.length < 6) errs.next = "Min 6 characters";
-    if (!pwForm.confirm)  errs.confirm  = "Please confirm password";
+    if (!pwForm.confirm) errs.confirm = "Please confirm password";
     else if (pwForm.next !== pwForm.confirm) errs.confirm = "Passwords don't match";
     if (Object.keys(errs).length) { setPwErrors(errs); return; }
 
@@ -219,7 +294,7 @@ export default function ProfilePage() {
     try {
       await axios.put(`${API_BASE}/doctors/change-password`, {
         currentPassword: pwForm.current,
-        newPassword:     pwForm.next,
+        newPassword: pwForm.next,
       }, { headers: authHeaders() });
       setPwForm({ current: "", next: "", confirm: "" });
       setPwErrors({});
@@ -231,14 +306,6 @@ export default function ProfilePage() {
     } finally {
       setPwSaving(false);
     }
-  };
-
-  // ── Profile picture (placeholder handler) ─────────────────────────────────
-  const handlePicChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setProfile((p) => ({ ...p, profilePicture: url }));
   };
 
   const inputCls = (err) =>
@@ -259,10 +326,10 @@ export default function ProfilePage() {
 
       {loading ? (
         <div className="space-y-6">
-          {[1,2,3].map((i) => (
+          {[1, 2, 3].map((i) => (
             <div key={i} className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4 animate-pulse">
               <div className="h-4 w-32 bg-gray-200 rounded" />
-              {[1,2].map((j) => <div key={j} className="h-10 bg-gray-100 rounded-xl" />)}
+              {[1, 2].map((j) => <div key={j} className="h-10 bg-gray-100 rounded-xl" />)}
             </div>
           ))}
         </div>
@@ -274,7 +341,7 @@ export default function ProfilePage() {
           {/* ── Profile Picture ──────────────────────────────────────────── */}
           <Section
             title="Profile Picture"
-            icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>}
+            icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
           >
             <div className="flex items-center gap-6">
               {/* Avatar */}
@@ -288,8 +355,8 @@ export default function ProfilePage() {
                 <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center
                   ${profile.isVerified ? "bg-green-500" : "bg-amber-400"}`}>
                   {profile.isVerified
-                    ? <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"/></svg>
-                    : <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/></svg>
+                    ? <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                    : <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" /></svg>
                   }
                 </div>
               </div>
@@ -303,11 +370,34 @@ export default function ProfilePage() {
                     {profile.isActive ? "● Active" : "● Inactive"}
                   </span>
                 </div>
-                <input type="file" accept="image/*" ref={fileRef} onChange={handlePicChange} className="hidden" />
-                <button onClick={() => fileRef.current?.click()}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                  Upload Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileRef}
+                  onChange={handlePicChange}
+                  disabled={uploadingPic}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploadingPic}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  {uploadingPic ? (
+                    <>
+                      <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Upload Photo
+                    </>
+                  )}
                 </button>
                 <p className="text-[10px] text-gray-400">JPG, PNG or GIF · Max 2MB</p>
               </div>
@@ -317,7 +407,7 @@ export default function ProfilePage() {
           {/* ── Personal Information ────────────────────────────────────── */}
           <Section
             title="Personal Information"
-            icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>}
+            icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Full Name" id="name">
@@ -340,7 +430,7 @@ export default function ProfilePage() {
           {/* ── Professional Information ────────────────────────────────── */}
           <Section
             title="Professional Information"
-            icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>}
+            icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Specialty */}
@@ -408,8 +498,8 @@ export default function ProfilePage() {
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white
                   text-sm font-bold shadow-md shadow-blue-200 disabled:opacity-60 transition-colors">
                 {saving
-                  ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Saving…</>
-                  : <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>Save Changes</>
+                  ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Saving…</>
+                  : <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>Save Changes</>
                 }
               </button>
             </div>
@@ -418,7 +508,7 @@ export default function ProfilePage() {
           {/* ── Change Password ─────────────────────────────────────────── */}
           <Section
             title="Change Password"
-            icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>}
+            icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>}
           >
             {pwToast.msg && <div className="mb-4"><InlineToast msg={pwToast.msg} type={pwToast.type} /></div>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -449,8 +539,8 @@ export default function ProfilePage() {
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white
                   text-sm font-bold shadow-md shadow-gray-300 disabled:opacity-60 transition-colors">
                 {pwSaving
-                  ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Updating…</>
-                  : <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>Update Password</>
+                  ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Updating…</>
+                  : <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>Update Password</>
                 }
               </button>
             </div>

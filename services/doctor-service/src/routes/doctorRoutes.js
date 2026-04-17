@@ -1,5 +1,7 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
+const { uploadProfilePicture } = require("../controllers/doctorController");
 
 const { doctorRegister, doctorLogin } = require("../controllers/authController");
 const {
@@ -26,6 +28,20 @@ const {
   getPublicDoctorAvailability,
 } = require("../controllers/doctorController");
 const { authenticate } = require("../middleware/auth");
+
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif/;
+    const extname = allowedTypes.test(file.mimetype);
+    if (extname) {
+      return cb(null, true);
+    }
+    cb(new Error("Only image files are allowed"));
+  }
+});
 
 // ── Public routes (no auth) ──────────────────────────────────────────────────
 
@@ -74,5 +90,7 @@ router.get("/dashboard/stats", authenticate, getDashboardStats);
 // ── Public Wildcard routes (MUST BE LAST) ──────────────────────────────────
 router.get("/:id/availability", getPublicDoctorAvailability);
 router.get("/:id", getPublicDoctorProfile);
+
+router.post("/upload-profile-picture", authenticate, upload.single("profilePicture"), uploadProfilePicture);
 
 module.exports = router;

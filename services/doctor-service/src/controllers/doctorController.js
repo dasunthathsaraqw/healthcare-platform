@@ -4,6 +4,15 @@ const jwt = require("jsonwebtoken");
 const Doctor = require("../models/Doctor");
 const Availability = require("../models/Availability");
 const Prescription = require("../models/Prescription");
+const cloudinary = require("cloudinary").v2;
+const streamifier = require("streamifier");
+
+// Configure Cloudinary (add this near the top of your controller file)
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // ─── Helper: external service URLs ───────────────────────────────────────────
 const APPOINTMENT_SERVICE_URL =
@@ -866,6 +875,55 @@ const getPublicDoctorAvailability = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/doctors/upload-profile-picture
+ * Upload profile picture to Cloudinary
+ */
+const uploadProfilePicture = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No file uploaded" });
+    }
+
+    // Upload to Cloudinary using stream
+    const uploadPromise = new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "doctor_profiles",
+          transformation: [
+            { width: 400, height: 400, crop: "fill", gravity: "face" },
+            { quality: "auto" }
+          ]
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+
+      streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+    });
+
+    const result = await uploadPromise;
+
+    // Update doctor's profile picture URL
+    const doctor = await Doctor.findByIdAndUpdate(
+      req.doctor._id,
+      { profilePicture: result.secure_url },
+      { new: true }
+    ).select("-password");
+
+    return res.status(200).json({
+      success: true,
+      profilePicture: doctor.profilePicture,
+      doctor: doctor
+    });
+  } catch (error) {
+    console.error("uploadProfilePicture error:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   // Private (requires auth)
   getDoctorProfile,
@@ -890,4 +948,5 @@ module.exports = {
   searchDoctors,
   getPublicDoctorProfile,
   getPublicDoctorAvailability,
+  uploadProfilePicture,
 };
