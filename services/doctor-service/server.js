@@ -5,7 +5,8 @@ const morgan = require("morgan");
 require("dotenv").config();
 
 const doctorRoutes = require("./src/routes/doctorRoutes");
-const adminRoutes  = require("./src/routes/adminRoutes");
+const adminRoutes = require("./src/routes/adminRoutes");
+const consultationRoutes = require("./src/routes/consultationRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -31,7 +32,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
 app.use("/api/doctors", doctorRoutes);
-app.use("/api/admin",   adminRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/doctors", consultationRoutes);
+
 
 // ── Health check ───────────────────────────────────────────────────────────────
 app.get("/health", (req, res) => {

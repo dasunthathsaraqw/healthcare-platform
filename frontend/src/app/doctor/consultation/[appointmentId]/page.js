@@ -13,6 +13,7 @@ const VideoConsultation = dynamic(
 );
 
 const API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
+const DOCTOR_API_BASE = (process.env.NEXT_PUBLIC_DOCTOR_API_URL || process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8080/api";
 
 function authHeaders() {
   const t = typeof window !== "undefined" ? localStorage.getItem("token") : "";
@@ -406,23 +407,25 @@ export default function ConsultationPage() {
   // ── Fetch appointment & patient ────────────────────────────────────────────
   useEffect(() => {
     if (!appointmentId) return;
+
     (async () => {
       try {
-        // Get appointment
-        const apptRes = await axios.get(
-          `${API_BASE}/doctors/appointments?id=${appointmentId}`,
+        setLoading(true);
+
+        // Single API call to get both appointment and patient data
+        const response = await axios.get(
+          `${DOCTOR_API_BASE}/doctors/consultation/${appointmentId}`,
           { headers: authHeaders() }
         );
-        const appt = (apptRes.data.appointments || apptRes.data || [])[0] || apptRes.data;
-        setAppointment(appt);
 
-        const pid = appt?.patientId?._id || appt?.patientId;
-        if (pid) {
-          const patRes = await axios.get(`${API_BASE}/doctors/patients/${pid}`, { headers: authHeaders() });
-          setPatient(patRes.data?.patient || patRes.data);
-          setPrescriptions(patRes.data?.prescriptions || []);
-        }
+        const { appointment: appt, patient: pat, prescriptions: rxList } = response.data;
+
+        setAppointment(appt);
+        setPatient(pat);
+        setPrescriptions(rxList || []);
+
       } catch (err) {
+        console.error("Fetch error:", err);
         setError(err.response?.data?.message || "Failed to load consultation data");
       } finally {
         setLoading(false);
@@ -447,11 +450,11 @@ export default function ConsultationPage() {
   const handleIssue = async (rxData) => {
     if (!appointment) return;
     setSaving(true);
-    const pid = appointment?.patientId?._id || appointment?.patientId;
+
     try {
-      // Save prescription
-      const prescriptionRes = await axios.post(`${API_BASE}/doctors/prescriptions`, {
-        patientId: pid,
+      // Save prescription using doctor service
+      await axios.post(`${DOCTOR_API_BASE}/doctors/prescriptions`, {
+        patientId: appointment.patientId,  // Direct string ID
         appointmentId: appointmentId,
         diagnosis: rxData.diagnosis,
         medications: rxData.medications,
@@ -459,28 +462,15 @@ export default function ConsultationPage() {
         followUpDate: rxData.followUpDate || undefined,
       }, { headers: authHeaders() });
 
-      const savedPrescription = prescriptionRes.data?.prescription;
-      if (savedPrescription) {
-        setPrescriptions((prev) => [savedPrescription, ...prev]);
-      }
+      // Complete appointment using new consultation endpoint
+      await axios.put(
+        `${DOCTOR_API_BASE}/doctors/consultation/${appointmentId}/complete`,
+        {},
+        { headers: authHeaders() }
+      );
 
       setCompleted(true);
       setSuccessModal(true);
-      setError("");
-
-      // Complete appointment in background so UI is not blocked if this is slow/hangs.
-      void axios
-        .put(
-          `${API_BASE}/doctors/appointments/${appointmentId}/complete`,
-          {},
-          { headers: authHeaders(), timeout: 8000 }
-        )
-        .catch((completeErr) => {
-          console.warn(
-            "Appointment completion failed after prescription save:",
-            completeErr?.response?.data || completeErr.message
-          );
-        });
     } catch (err) {
       setError(err.response?.data?.message || "Failed to save prescription");
     } finally {

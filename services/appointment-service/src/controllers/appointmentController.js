@@ -108,7 +108,7 @@ const reserveSlot = async (req, res) => {
 
     // Generate a unique reservation ID
     const reservationId = `RES_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    
+
     // Lock the slot for 10 minutes
     const locked = lockSlot(doctorId, apptDateTime, reservationId);
     if (!locked) {
@@ -140,7 +140,7 @@ const reserveSlot = async (req, res) => {
     // Store in a temporary map
     if (!global.reservations) global.reservations = new Map();
     global.reservations.set(reservationId, reservationData);
-    
+
     // Auto-cleanup after 10 minutes
     setTimeout(() => {
       if (global.reservations?.has(reservationId)) {
@@ -209,7 +209,7 @@ const createAppointmentFromReservation = async (req, res) => {
 
     // Calculate patient number
     let patientNumber = reservation.patientNumber;
-    
+
     if (!patientNumber) {
       const startOfDay = new Date(reservation.dateTime);
       startOfDay.setHours(0, 0, 0, 0);
@@ -250,46 +250,46 @@ const createAppointmentFromReservation = async (req, res) => {
 
     // ✅ Increment bookedSlots by calling doctor service's update endpoint
     // ✅ Increment bookedSlots by calling doctor service's update endpoint
-if (reservation.availabilityId) {
-  try {
-    const axios = require("axios");
-    const DOCTOR_SERVICE_URL = process.env.DOCTOR_SERVICE_URL || "http://localhost:3002";
-    
-    // Get the current availability to get totalSlots and current bookedSlots
-    const getResponse = await axios.get(
-      `${DOCTOR_SERVICE_URL}/api/doctors/availability`,
-      {
-        headers: { Authorization: req.headers.authorization }
-      }
-    );
-    
-    // Find the specific availability
-    const availabilityList = getResponse.data.availability || [];
-    const currentAvailability = availabilityList.find(a => a._id === reservation.availabilityId);
-    
-    if (currentAvailability) {
-      const newBookedSlots = (currentAvailability.bookedSlots || 0) + 1;
-      
-      // Update the availability with new bookedSlots
-      await axios.put(
-        `${DOCTOR_SERVICE_URL}/api/doctors/availability/${reservation.availabilityId}`,
-        { bookedSlots: newBookedSlots },
-        { 
-          headers: { 
-            Authorization: req.headers.authorization,
-            "Content-Type": "application/json"
-          } 
+    if (reservation.availabilityId) {
+      try {
+        const axios = require("axios");
+        const DOCTOR_SERVICE_URL = process.env.DOCTOR_SERVICE_URL || "http://localhost:3002";
+
+        // Get the current availability to get totalSlots and current bookedSlots
+        const getResponse = await axios.get(
+          `${DOCTOR_SERVICE_URL}/api/doctors/availability`,
+          {
+            headers: { Authorization: req.headers.authorization }
+          }
+        );
+
+        // Find the specific availability
+        const availabilityList = getResponse.data.availability || [];
+        const currentAvailability = availabilityList.find(a => a._id === reservation.availabilityId);
+
+        if (currentAvailability) {
+          const newBookedSlots = (currentAvailability.bookedSlots || 0) + 1;
+
+          // Update the availability with new bookedSlots
+          await axios.put(
+            `${DOCTOR_SERVICE_URL}/api/doctors/availability/${reservation.availabilityId}`,
+            { bookedSlots: newBookedSlots },
+            {
+              headers: {
+                Authorization: req.headers.authorization,
+                "Content-Type": "application/json"
+              }
+            }
+          );
+          console.log(`✅ Updated bookedSlots for availability ${reservation.availabilityId} to ${newBookedSlots}/${currentAvailability.totalSlots}`);
+        } else {
+          console.warn(`⚠️ Availability ${reservation.availabilityId} not found`);
         }
-      );
-      console.log(`✅ Updated bookedSlots for availability ${reservation.availabilityId} to ${newBookedSlots}/${currentAvailability.totalSlots}`);
-    } else {
-      console.warn(`⚠️ Availability ${reservation.availabilityId} not found`);
+      } catch (err) {
+        console.error(`⚠️ Failed to update bookedSlots:`, err.response?.data || err.message);
+        // Don't fail the appointment creation - log error but continue
+      }
     }
-  } catch (err) {
-    console.error(`⚠️ Failed to update bookedSlots:`, err.response?.data || err.message);
-    // Don't fail the appointment creation - log error but continue
-  }
-}
 
     // Release the lock and clean up reservation
     unlockSlot(reservation.doctorId, reservation.dateTime, reservationId);
@@ -591,11 +591,10 @@ const getDoctorStats = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// READ — Single appointment
-// GET /api/appointments/:id
-// ─────────────────────────────────────────────────────────────────────────────
-
+/**
+ * GET /api/appointments/:id
+ * Get single appointment by ID (with populated data)
+ */
 const getAppointmentById = async (req, res) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
@@ -688,19 +687,19 @@ const cancelAppointment = async (req, res) => {
 
     // Only confirmed appointments can be cancelled
     if (appointment.status !== "confirmed") {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Only confirmed appointments can be cancelled" 
+      return res.status(400).json({
+        success: false,
+        message: "Only confirmed appointments can be cancelled"
       });
     }
 
     // Calculate hours before appointment
     const hoursBefore = (appointment.dateTime - new Date()) / (1000 * 60 * 60);
-    
+
     // Calculate refund amount based on time
     let refundAmount = 0;
     let refundPercentage = 0;
-    
+
     if (hoursBefore >= 24) {
       refundPercentage = 100;
       refundAmount = appointment.consultationFee;
@@ -722,7 +721,7 @@ const cancelAppointment = async (req, res) => {
     appointment.refundRequested = true;
     appointment.refundAmount = refundAmount;
     appointment.refundRequestedAt = new Date();
-    
+
     await appointment.save();
 
     // TODO: Send email to admin (you can implement this later)
@@ -731,7 +730,7 @@ const cancelAppointment = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: refundAmount > 0 
+      message: refundAmount > 0
         ? `Cancellation request submitted. Refund of Rs. ${refundAmount} (${refundPercentage}%) pending admin approval.`
         : "Appointment cancelled. No refund applicable.",
       appointment,
@@ -776,14 +775,14 @@ const updateAppointmentPayment = async (req, res) => {
       appointment.status = "confirmed";
       appointment.paymentStatus = "paid";
       appointment.paymentId = paymentId;
-      
+
       // Generate meeting link for confirmed appointment
       if (!appointment.meetingLink) {
         appointment.meetingLink = generateMeetingLink(appointment._id.toString());
       }
-      
+
       await appointment.save();
-      
+
       // Publish notification for confirmed appointment
       publishNotificationEvent("APPOINTMENT_BOOKED", {
         appointmentId: appointment._id.toString(),
@@ -801,14 +800,14 @@ const updateAppointmentPayment = async (req, res) => {
       }).catch((err) =>
         console.warn("Non-critical: Failed to publish appointment confirmation:", err.message)
       );
-      
-      return res.status(200).json({ 
-        success: true, 
+
+      return res.status(200).json({
+        success: true,
         message: "Payment confirmed! Appointment has been scheduled.",
-        appointment 
+        appointment
       });
     }
-    
+
     // Otherwise just update payment status (for failed/refunded scenarios)
     if (paymentStatus === "paid") {
       appointment.paymentStatus = "paid";
@@ -817,7 +816,7 @@ const updateAppointmentPayment = async (req, res) => {
     } else if (paymentStatus === "refunded") {
       appointment.paymentStatus = "refunded";
     }
-    
+
     appointment.paymentId = paymentId;
     await appointment.save();
 
@@ -886,7 +885,7 @@ const processRefundRequest = async (req, res) => {
     appointment.refundProcessedBy = "admin"; // Set static value since no auth
     appointment.adminNotes = adminNotes || null;
     appointment.refundReference = refundReference || null;
-    
+
     await appointment.save();
 
     console.log(`✅ Refund processed for appointment ${appointment._id}: Rs. ${appointment.refundAmount}`);
@@ -931,7 +930,7 @@ const rejectCancellationRequest = async (req, res) => {
     appointment.refundRequested = false;
     appointment.adminNotes = rejectionReason || "Cancellation request rejected by admin";
     appointment.cancellationReason = null;
-    
+
     await appointment.save();
 
     console.log(`❌ Cancellation rejected for appointment ${appointment._id}`);

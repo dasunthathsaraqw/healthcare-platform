@@ -27,10 +27,10 @@ const start = async () => {
     await connectDB();
 
     // 2. Connect to RabbitMQ — non-fatal (events drop gracefully if unavailable)
-    const { connectRabbitMQ } = require("./src/utils/rabbitmq");
-    connectRabbitMQ().catch((e) =>
-      console.warn("⚠️  RabbitMQ unavailable at startup — events will be skipped:", e.message)
-    );
+    // const { connectRabbitMQ } = require("./src/utils/rabbitmq");
+    // connectRabbitMQ().catch((e) =>
+    //   console.warn("⚠️  RabbitMQ unavailable at startup — events will be skipped:", e.message)
+    // );
 
     // 3. Start HTTP server
     app.listen(PORT, () => {
