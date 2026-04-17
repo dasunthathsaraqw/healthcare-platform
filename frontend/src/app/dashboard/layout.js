@@ -63,6 +63,7 @@ const NAV_SECTIONS = [
       {
         label: "Medical Vault",
         href: "/dashboard/reports",
+        patientOnly: true,
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -83,6 +84,7 @@ const NAV_SECTIONS = [
       {
         label: "Health Metrics",
         href: "/dashboard/metrics",
+        patientOnly: true,
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -98,6 +100,7 @@ const NAV_SECTIONS = [
       {
         label: "My Profile",
         href: "/dashboard/profile",
+        patientOnly: true,
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -108,6 +111,7 @@ const NAV_SECTIONS = [
       {
         label: "Notifications",
         href: "/dashboard/settings/notifications",
+        patientOnly: true,
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -118,6 +122,7 @@ const NAV_SECTIONS = [
       {
         label: "Data & Privacy",
         href: "/dashboard/settings/privacy",
+        patientOnly: true,
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -125,15 +130,48 @@ const NAV_SECTIONS = [
           </svg>
         ),
       },
+    ],
+  },
+  {
+    heading: "Admin Controls",
+    items: [
       {
-        label: "Admin Panel",
+        label: "Admin Profile",
+        href: "/dashboard/admin/profile",
+        adminOnly: true,
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        ),
+      },
+      {
+        label: "User Management",
         href: "/dashboard/admin",
         adminOnly: true,
         icon: (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+        ),
+      },
+      {
+        label: "Financial Oversight",
+        href: "/dashboard/admin/finance",
+        adminOnly: true,
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        ),
+      },
+      {
+        label: "Platform Logs",
+        href: "/dashboard/admin/logs",
+        adminOnly: true,
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         ),
       },
@@ -152,7 +190,10 @@ const BREADCRUMB_MAP = {
   "/dashboard/profile": "My Profile",
   "/dashboard/settings/notifications": "Notifications",
   "/dashboard/settings/privacy": "Data & Privacy",
-  "/dashboard/admin": "Admin Panel",
+  "/dashboard/admin": "User Management",
+  "/dashboard/admin/profile": "Admin Profile",
+  "/dashboard/admin/finance": "Financial Oversight",
+  "/dashboard/admin/logs": "Platform Logs",
 };
 
 // ── Avatar initials helper ────────────────────────────────────────────────────
@@ -247,7 +288,9 @@ export default function PatientDashboardLayout({ children }) {
           </div>
           <div>
             <p className="text-sm font-bold text-gray-900 leading-tight">MediCare</p>
-            <p className="text-[10px] text-blue-500 font-medium tracking-wide uppercase">Patient Portal</p>
+            <p className="text-[10px] text-blue-500 font-medium tracking-wide uppercase">
+              {patient?.role === "admin" ? "Admin Portal" : "Patient Portal"}
+            </p>
           </div>
         </div>
 
@@ -271,9 +314,11 @@ export default function PatientDashboardLayout({ children }) {
         {/* Nav — sectioned */}
         <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-4">
           {NAV_SECTIONS.map((section) => {
-            const visibleItems = section.items.filter(
-              (item) => !item.adminOnly || patient?.role === "admin"
-            );
+            const visibleItems = section.items.filter((item) => {
+              if (item.adminOnly && patient?.role !== "admin") return false;
+              if (item.patientOnly && patient?.role === "admin") return false;
+              return true;
+            });
             if (visibleItems.length === 0) return null;
             return (
               <div key={section.heading}>
@@ -346,7 +391,9 @@ export default function PatientDashboardLayout({ children }) {
           </button>
 
           <div className="hidden lg:flex items-center gap-2 text-sm text-gray-500">
-            <span className="text-gray-400">Patient Portal</span>
+            <span className="text-gray-400">
+              {patient?.role === "admin" ? "Admin Portal" : "Patient Portal"}
+            </span>
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>

@@ -30,6 +30,13 @@ router.delete(
   metricsController.deleteMetric
 );
 
+// Get metrics chart data
+router.get(
+  '/metrics/chart',
+  authorize(ROLES.PATIENT),
+  metricsController.getMetricsChartData
+);
+
 // ── GDPR Data Export ──────────────────────────────────────────────────────────
 
 // Download complete patient data as JSON (profile + reports + metrics)
