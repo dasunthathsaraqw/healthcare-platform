@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import StepIndicator from "@/components/ai-checker/StepIndicator";
 import DescribeStep from "@/components/ai-checker/DescribeStep";
 import RefineStep from "@/components/ai-checker/RefineStep";
@@ -23,13 +23,26 @@ export default function AICheckerPage() {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [insights, setInsights] = useState(null);
+  const analyzeInFlightRef = useRef(false);
+  const insightsInFlightRef = useRef(false);
+
+  const normalizeAiError = (message, fallback) => {
+    const text = message || fallback;
+    return /429|503|quota|rate limit|too many requests|resource exhausted|temporarily unavailable|service unavailable/i.test(
+      text,
+    )
+      ? "AI service is busy right now. Please wait a bit and try again."
+      : text;
+  };
 
   const handleAnalyze = async () => {
+    if (analyzeInFlightRef.current) return;
     if (!symptoms.trim()) {
       setError("Please describe your symptoms.");
       return;
     }
 
+    analyzeInFlightRef.current = true;
     setLoading(true);
     setError("");
     try {
@@ -43,18 +56,22 @@ export default function AICheckerPage() {
       setQuestions(Array.isArray(q) ? q : []);
       setStep(2);
     } catch (err) {
-      setError(err?.message || "Failed to analyze symptoms.");
+      const message = err?.message || "Failed to analyze symptoms.";
+      setError(normalizeAiError(message, "Failed to analyze symptoms."));
     } finally {
+      analyzeInFlightRef.current = false;
       setLoading(false);
     }
   };
 
   const handleInsights = async () => {
+    if (insightsInFlightRef.current) return;
     if (!questions.length) {
       setError("No follow-up questions available.");
       return;
     }
 
+    insightsInFlightRef.current = true;
     setLoading(true);
     setError("");
     try {
@@ -76,8 +93,10 @@ export default function AICheckerPage() {
       setInsights(res?.data || null);
       setStep(3);
     } catch (err) {
-      setError(err?.message || "Failed to generate insights.");
+      const message = err?.message || "Failed to generate insights.";
+      setError(normalizeAiError(message, "Failed to generate insights."));
     } finally {
+      insightsInFlightRef.current = false;
       setLoading(false);
     }
   };
