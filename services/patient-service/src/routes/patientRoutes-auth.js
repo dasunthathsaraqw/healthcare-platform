@@ -113,6 +113,19 @@ router.patch(
   adminController.toggleUserStatus
 );
 
+// Admin Notifications
+router.post(
+  '/admin/notifications/send',
+  authorize(ROLES.ADMIN),
+  adminController.sendNotification
+);
+
+router.get(
+  '/admin/notifications',
+  authorize(ROLES.ADMIN),
+  adminController.getNotifications
+);
+
 // ==========================================
 // CROSS-SERVICE ROUTES
 // ==========================================

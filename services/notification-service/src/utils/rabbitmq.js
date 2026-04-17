@@ -1,7 +1,9 @@
 // src/utils/rabbitmq.js
 const amqp = require('amqplib');
 const emailService = require('../services/emailService');
+const smsService = require('../services/smsService');
 const NotificationLog = require('../models/NotificationLog');
+const AdminNotificationLog = require('../models/AdminNotificationLog');
 
 // ─── Module-level references for graceful shutdown ────────────────────────────
 let connection = null;
@@ -23,6 +25,46 @@ const getConnection = () => connection;
 // Connects to RabbitMQ, asserts the main queue with a Dead Letter Exchange,
 // asserts the DLQ that catches failed messages, and starts consuming.
 // ─────────────────────────────────────────────────────────────────────────────
+
+const handleAdminNotification = async (data) => {
+  const { patientId, patientEmail, patientPhone, patientName, subject, message, sendEmail, sendSMS, adminId } = data;
+
+  // Create admin notification log
+  const adminLog = await AdminNotificationLog.create({
+    adminId,
+    recipientId: patientId,
+    subject,
+    message,
+    deliveryMethods: [],
+    status: 'PENDING'
+  });
+
+  try {
+    // Send email if requested
+    if (sendEmail && patientEmail) {
+      await emailService.sendAdminNotificationEmail(data);
+      adminLog.deliveryMethods.push('EMAIL');
+    }
+
+    // Send SMS if requested
+    if (sendSMS && patientPhone) {
+      await smsService.sendSMS(patientPhone, `Admin Message: ${subject} - ${message}`);
+      adminLog.deliveryMethods.push('SMS');
+    }
+
+    // Update log as successful
+    adminLog.status = 'SENT';
+    await adminLog.save();
+
+    console.log(`✅ Admin notification sent to ${patientName} (${patientEmail})`);
+  } catch (error) {
+    console.error(`❌ Failed to send admin notification to ${patientName}:`, error.message);
+    adminLog.status = 'FAILED';
+    adminLog.errorMessage = error.message;
+    await adminLog.save();
+    throw error; // Re-throw to trigger DLQ
+  }
+};
 
 const consumeNotifications = async () => {
   try {
@@ -99,6 +141,10 @@ const consumeNotifications = async () => {
 
           case 'APPOINTMENT_BOOKED':
             await emailService.sendAppointmentBookedEmail(payload.data);
+            break;
+
+          case 'ADMIN_NOTIFICATION':
+            await handleAdminNotification(payload.data);
             break;
 
           default:

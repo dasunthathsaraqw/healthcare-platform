@@ -284,3 +284,58 @@ exports.sendAppointmentBookedEmail = async (data) => {
 
   console.log(`📧 Appointment email sent to ${data.patientEmail}: ${info.messageId}`);
 };
+
+/**
+ * Send admin notification email to a patient
+ */
+exports.sendAdminNotificationEmail = async (data) => {
+  const subject = data.subject;
+  const previewText = `Message from ${BRAND_NAME} Admin`;
+
+  const bodyHtml = `
+    <div style="background:#f8fafc;border-radius:10px;padding:20px;margin:0 0 16px;">
+      <h2 style="margin:0 0 12px;color:#1e293b;font-size:18px;font-weight:600;">
+        ${data.subject}
+      </h2>
+      <p style="margin:0;font-size:15px;color:#374151;line-height:1.6;">
+        ${data.message.replace(/\n/g, '<br>')}
+      </p>
+    </div>
+
+    <div style="background:#fef3c7;border-radius:10px;padding:16px;margin:0 0 8px;border-left:4px solid #f59e0b;">
+      <p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">
+        This is an official message from the ${BRAND_NAME} administration team.
+        If you have any questions, please contact our support team.
+      </p>
+    </div>
+  `;
+
+  const html = buildHtmlEmail({
+    previewText,
+    title: data.subject,
+    bodyHtml,
+    ctaText: 'Go to Dashboard',
+    ctaUrl: process.env.FRONTEND_URL
+      ? `${process.env.FRONTEND_URL}/dashboard`
+      : 'http://localhost:3000/dashboard',
+  });
+
+  if (!isCredsConfigured()) {
+    mockLog(
+      data.patientEmail || 'patient@example.com',
+      subject,
+      data.message
+    );
+    return;
+  }
+
+  const info = await transporter.sendMail({
+    from: `"${BRAND_NAME} Admin" <${process.env.EMAIL_USER}>`,
+    to: data.patientEmail,
+    subject,
+    html,
+    text: data.message,
+  });
+
+  console.log(`📧 Admin notification email sent to ${data.patientEmail}: ${info.messageId}`);
+};
