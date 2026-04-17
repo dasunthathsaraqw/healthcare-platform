@@ -72,24 +72,49 @@ function todayISO() {
 // ─────────────────────────────────────────────────────────────────────────────
 // TOAST
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// TOAST CONTAINER
+// ─────────────────────────────────────────────────────────────────────────────
 
 function ToastContainer({ toasts, removeToast }) {
-  if (typeof window === "undefined") return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Don't render anything on server or before mount
+  if (!mounted) return null;
+
   return createPortal(
     <div className="fixed bottom-5 right-5 z-[300] flex flex-col gap-2 pointer-events-none">
       {toasts.map((t) => (
-        <div key={t.id}
+        <div
+          key={t.id}
           className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-sm font-medium
             animate-[slideUp_0.2s_ease-out]
             ${t.type === "success" ? "bg-green-600 text-white"
               : t.type === "error" ? "bg-red-600 text-white"
                 : "bg-gray-900 text-white"}`}
         >
-          {t.type === "success" && <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>}
-          {t.type === "error" && <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>}
+          {t.type === "success" && (
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+          {t.type === "error" && (
+            <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+          )}
           <span>{t.message}</span>
-          <button onClick={() => removeToast(t.id)} className="ml-1 opacity-70 hover:opacity-100">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          <button
+            onClick={() => removeToast(t.id)}
+            className="ml-1 opacity-70 hover:opacity-100"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
       ))}
@@ -103,21 +128,36 @@ function ToastContainer({ toasts, removeToast }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function RejectModal({ open, onClose, onConfirm, loading }) {
+  const [mounted, setMounted] = useState(false);
   const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
   const textRef = useRef(null);
 
+  // Mount detection
   useEffect(() => {
-    if (open) { setReason(""); setErr(""); setTimeout(() => textRef.current?.focus(), 60); }
-  }, [open]);
+    setMounted(true);
+  }, []);
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (open && mounted) {
+      setReason("");
+      setErr("");
+      setTimeout(() => textRef.current?.focus(), 80);
+    }
+  }, [open, mounted]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!reason.trim()) { setErr("Please provide a rejection reason."); return; }
+    if (!reason.trim()) {
+      setErr("Please provide a rejection reason.");
+      return;
+    }
     onConfirm(reason.trim());
   };
 
-  if (!open || typeof window === "undefined") return null;
+  if (!open || !mounted) return null;
+
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -133,10 +173,16 @@ function RejectModal({ open, onClose, onConfirm, loading }) {
             <h2 className="text-base font-bold text-gray-900">Reject Appointment</h2>
             <p className="text-xs text-gray-500">Please give a reason for the patient</p>
           </div>
-          <button onClick={onClose} className="ml-auto p-1.5 rounded-lg hover:bg-red-100 text-gray-400 hover:text-gray-600">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          <button
+            onClick={onClose}
+            className="ml-auto p-1.5 rounded-lg hover:bg-red-100 text-gray-400 hover:text-gray-600"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
+
         {/* Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
@@ -147,7 +193,10 @@ function RejectModal({ open, onClose, onConfirm, loading }) {
               ref={textRef}
               rows={4}
               value={reason}
-              onChange={(e) => { setReason(e.target.value); setErr(""); }}
+              onChange={(e) => {
+                setReason(e.target.value);
+                setErr("");
+              }}
               placeholder="e.g. Schedule conflict, please rebook for next week…"
               className={`w-full px-4 py-3 rounded-xl border text-sm text-gray-800 placeholder-gray-400 resize-none
                 focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent bg-gray-50 transition
@@ -155,15 +204,32 @@ function RejectModal({ open, onClose, onConfirm, loading }) {
             />
             {err && <p className="text-xs text-red-500 mt-1">{err}</p>}
           </div>
+
           <div className="flex gap-3">
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+            >
               Cancel
             </button>
-            <button type="submit" disabled={loading}
+            <button
+              type="submit"
+              disabled={loading}
               className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold
-                disabled:opacity-60 flex items-center justify-center gap-2 shadow-md shadow-red-200 transition-colors">
-              {loading ? (<><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Rejecting…</>) : "Reject Appointment"}
+                disabled:opacity-60 flex items-center justify-center gap-2 shadow-md shadow-red-200 transition-colors"
+            >
+              {loading ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Rejecting…
+                </>
+              ) : (
+                "Reject Appointment"
+              )}
             </button>
           </div>
         </form>
@@ -177,82 +243,40 @@ function RejectModal({ open, onClose, onConfirm, loading }) {
 // PATIENT DETAILS MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MetricCard({ type, entries }) {
-  const latest = entries[0];
-  if (!latest) return null;
-
-  const icons = {
-    blood_pressure: "🩸",
-    weight: "⚖️",
-    heart_rate: "❤️",
-  };
-  const labels = {
-    blood_pressure: "Blood Pressure",
-    weight: "Weight",
-    heart_rate: "Heart Rate",
-  };
-  const colors = {
-    blood_pressure: "from-red-50 to-pink-50 border-red-100",
-    weight: "from-blue-50 to-cyan-50 border-blue-100",
-    heart_rate: "from-purple-50 to-violet-50 border-purple-100",
-  };
-  const textColors = {
-    blood_pressure: "text-red-700",
-    weight: "text-blue-700",
-    heart_rate: "text-purple-700",
-  };
-
-  const displayValue = type === "blood_pressure"
-    ? `${latest.value?.systolic || "—"}/${latest.value?.diastolic || "—"}`
-    : latest.value;
-
-  return (
-    <div className={`rounded-xl border bg-gradient-to-br p-4 ${colors[type] || "from-gray-50 to-gray-100 border-gray-100"}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{labels[type] || type}</span>
-        <span className="text-base">{icons[type] || "📊"}</span>
-      </div>
-      <p className={`text-2xl font-bold ${textColors[type] || "text-gray-800"}`}>
-        {displayValue} <span className="text-sm font-normal text-gray-400">{latest.unit}</span>
-      </p>
-      <p className="text-xs text-gray-400 mt-1">
-        {new Date(latest.recordedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-      </p>
-      {entries.length > 1 && (
-        <p className="text-[10px] text-gray-400 mt-2">{entries.length} readings in last 30 days</p>
-      )}
-    </div>
-  );
-}
-
 function PatientModal({ open, onClose, patientId }) {
+  const [mounted, setMounted] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [innerTab, setInnerTab] = useState("info");
   const [error, setError] = useState("");
 
+  // Mount detection
   useEffect(() => {
-    if (!open || !patientId) return;
+    setMounted(true);
+  }, []);
+
+  // Fetch patient data when modal opens
+  useEffect(() => {
+    if (!open || !patientId || !mounted) return;
+
     setInnerTab("info");
     setError("");
     setData(null);
     setLoading(true);
 
-    // Call patient-service directly — avoids the broken cross-service DNS
     axios
       .get(`${API_BASE}/patients/doctor/patient/${patientId}/summary`, { headers: authHeaders() })
       .then(({ data: res }) => setData(res))
       .catch((err) => setError(err.response?.data?.message || "Failed to load patient data"))
       .finally(() => setLoading(false));
-  }, [open, patientId]);
+  }, [open, patientId, mounted]);
 
-  if (!open || typeof window === "undefined") return null;
+  if (!open || !mounted) return null;
 
   const patient = data?.patient || {};
   const metricsGrouped = data?.metrics?.grouped || {};
   const recentReports = data?.reports?.recent || [];
   const age = calcAge(patient.dob || patient.dateOfBirth);
-
   const metricTypes = Object.keys(metricsGrouped);
 
   const INNER_TABS = [
@@ -266,7 +290,6 @@ function PatientModal({ open, onClose, patientId }) {
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden animate-[scaleIn_0.2s_ease-out] flex flex-col max-h-[90vh]">
-
         {/* Header */}
         <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-cyan-50 shrink-0">
           <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold shrink-0">
@@ -276,19 +299,27 @@ function PatientModal({ open, onClose, patientId }) {
             <h2 className="text-base font-bold text-gray-900 truncate">{patient.name || "Patient Details"}</h2>
             <p className="text-xs text-gray-500">{patient.email || ""}</p>
           </div>
-          <button onClick={onClose} className="ml-auto p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 shrink-0">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          <button
+            onClick={onClose}
+            className="ml-auto p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
         {/* Inner tabs */}
         <div className="flex border-b border-gray-100 shrink-0 px-2 pt-1 gap-1 bg-white overflow-x-auto">
           {INNER_TABS.map((t) => (
-            <button key={t.id} onClick={() => setInnerTab(t.id)}
+            <button
+              key={t.id}
+              onClick={() => setInnerTab(t.id)}
               className={`px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors
                 ${innerTab === t.id
                   ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+                  : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            >
               {t.label}
             </button>
           ))}
@@ -301,6 +332,7 @@ function PatientModal({ open, onClose, patientId }) {
               {[1, 2, 3, 4].map((i) => <div key={i} className="h-8 bg-gray-100 rounded-xl" />)}
             </div>
           )}
+
           {error && (
             <div className="text-center py-10">
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
@@ -312,6 +344,8 @@ function PatientModal({ open, onClose, patientId }) {
               <p className="text-xs text-red-500">{error}</p>
             </div>
           )}
+
+
 
           {!loading && !error && (
             <>
@@ -806,6 +840,24 @@ export default function AppointmentsPage() {
     }
   };
 
+  // ── Delete Appointment ─────────────────────────────────────────────────────
+  const handleDelete = async (id) => {
+    if (!confirm("Are you sure you want to delete this appointment?")) return;
+
+    setActionLoading(id);
+    try {
+      await axios.delete(`${API_BASE}/appointments/manage/${id}`, {
+        headers: authHeaders(),
+      });
+
+      addToast("Appointment deleted successfully", "success");
+      setAppointments((prev) => prev.filter((a) => a._id !== id));
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to delete appointment", "error");
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   // ── Start Consultation ────────────────────────────────────────────────────
   const handleStartConsultation = (appointmentId) => {

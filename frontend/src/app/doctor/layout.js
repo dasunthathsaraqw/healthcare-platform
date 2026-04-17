@@ -90,7 +90,7 @@ export default function DoctorLayout({ children }) {
     try {
       const stored = localStorage.getItem("user");
       if (stored) setDoctor(JSON.parse(stored));
-    } catch (_) {}
+    } catch (_) { }
   }, []);
 
   // Close sidebar on route change (mobile)
@@ -199,8 +199,7 @@ export default function DoctorLayout({ children }) {
         <div className="px-3 pb-5 border-t border-gray-100 pt-3">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium
-              text-red-500 hover:bg-red-50 transition-all duration-150 group"
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 transition-all duration-150 group"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
