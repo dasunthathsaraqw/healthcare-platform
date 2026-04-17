@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service-deployment
+  namespace: healthcare
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+      - name: payment-service
+        image: kalana/payment-service:latest
+        ports:
+        - containerPort: 3004
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+        env:
+        - name: PORT
+          value: "3004"
+        - name: DB_URL
+          valueFrom:
+            secretKeyRef:
+              name: healthcare-secrets
+              key: payment-db-url
+        - name: STRIPE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: healthcare-secrets
+              key: stripe-secret-key
+        - name: PAYHERE_MERCHANT_ID
+          valueFrom:
+            secretKeyRef:
+              name: healthcare-secrets
+              key: payhere-merchant-id
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: healthcare
+spec:
+  selector:
+    app: payment-service
+  ports:
+    - protocol: TCP
+      port: 3004
+      targetPort: 3004

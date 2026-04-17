@@ -1,0 +1,90 @@
+# PersistentVolumeClaim for Patient Database
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: patient-db-pvc
+  namespace: healthcare
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+# Deployment for Patient Database
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patient-db
+  namespace: healthcare
+  labels:
+    app: patient-db
+    service: mongodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: patient-db
+  template:
+    metadata:
+      labels:
+        app: patient-db
+        service: mongodb
+    spec:
+      containers:
+      - name: mongodb
+        image: mongo:latest
+        ports:
+        - containerPort: 27017
+          name: mongodb
+        env:
+        - name: MONGO_INITDB_DATABASE
+          value: "patientdb"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        volumeMounts:
+        - name: patient-db-storage
+          mountPath: /data/db
+        livenessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: patient-db-storage
+        persistentVolumeClaim:
+          claimName: patient-db-pvc
+---
+# Service for Patient Database
+apiVersion: v1
+kind: Service
+metadata:
+  name: patient-db-service
+  namespace: healthcare
+  labels:
+    app: patient-db
+spec:
+  selector:
+    app: patient-db
+  ports:
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
+      name: mongodb
+  clusterIP: None  # Headless service for statefulset behavior

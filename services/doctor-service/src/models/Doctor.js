@@ -65,7 +65,7 @@ const doctorSchema = new mongoose.Schema(
     },
     profilePicture: {
       type: String,
-      default: null,
+      default: "",
     },
   },
   {

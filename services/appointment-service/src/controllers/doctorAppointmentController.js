@@ -8,9 +8,9 @@ exports.getDoctorAppointments = async (req, res) => {
   try {
     const doctorId = req.user.id;
     const { status, date } = req.query;
-    
+
     let filter = { doctorId };
-    
+
     if (status === "pending") {
       filter.status = "pending";
     } else if (status === "upcoming") {
@@ -40,7 +40,7 @@ exports.getDoctorAppointments = async (req, res) => {
     const appointments = await Appointment.find(filter)
       .sort({ dateTime: -1 })
       .populate("patientId", "name email profilePicture phone");
-      
+
     // Format patient object properly if populated is just returning raw object
     const formattedAppointments = appointments.map(appt => {
       const formatted = appt.toObject();
@@ -89,8 +89,8 @@ exports.updateAppointmentStatus = async (req, res) => {
 
     // Auto-assign meeting link when confirming
     if (status === "confirmed" && !appointment.meetingLink) {
-        const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-        appointment.meetingLink = `${baseUrl}/dashboard/consultation/${appointment._id}`;
+      const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+      appointment.meetingLink = `${baseUrl}/dashboard/consultation/${appointment._id}`;
     }
 
     await appointment.save();
@@ -121,5 +121,72 @@ exports.deleteAppointment = async (req, res) => {
   } catch (error) {
     console.error("Error deleting appointment:", error);
     return res.status(500).json({ success: false, message: "Failed to delete appointment." });
+  }
+};
+
+
+/**
+ * GET /api/appointments/doctor/:doctorId/patients
+ * Get unique patient IDs and stats for a specific doctor
+ */
+exports.getDoctorPatients = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+
+    console.log("=== Appointment Service: getDoctorPatients ===");
+    console.log("Doctor ID:", doctorId);
+
+    // Find all appointments for this doctor
+    const Appointment = require('../models/Appointment'); // Make sure this path is correct
+    const appointments = await Appointment.find({
+      doctorId: doctorId
+    }).sort({ dateTime: -1 });
+
+    console.log(`Found ${appointments.length} appointments for doctor`);
+
+    if (appointments.length === 0) {
+      return res.status(200).json({
+        success: true,
+        patientIds: [],
+        patientStats: [],
+      });
+    }
+
+    // Get unique patient IDs
+    const uniquePatientIds = [...new Set(
+      appointments.map(app => app.patientId.toString())
+    )];
+
+    console.log(`Unique patient IDs:`, uniquePatientIds);
+
+    // Get stats for each patient
+    const patientStats = await Promise.all(
+      uniquePatientIds.map(async (patientId) => {
+        const patientAppointments = await Appointment.find({
+          doctorId: doctorId,
+          patientId: patientId,
+        }).sort({ dateTime: -1 });
+
+        return {
+          patientId,
+          lastAppointment: patientAppointments[0]?.dateTime || null,
+          appointmentCount: patientAppointments.length,
+        };
+      })
+    );
+
+    console.log(`Returning stats for ${patientStats.length} patients`);
+
+    return res.status(200).json({
+      success: true,
+      patientIds: uniquePatientIds,
+      patientStats: patientStats,
+    });
+  } catch (error) {
+    console.error("getDoctorPatients error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
