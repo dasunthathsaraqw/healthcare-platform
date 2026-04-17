@@ -60,8 +60,8 @@ mongoose.connection.on("disconnected", () => {
 });
 
 // RabbitMQ connection
-const { connectRabbitMQ } = require("./src/utils/rabbitmq");
-connectRabbitMQ();
+//const { connectRabbitMQ } = require("./src/utils/rabbitmq");
+//connectRabbitMQ();
 
 // Health Check
 app.get("/health", (req, res) => {

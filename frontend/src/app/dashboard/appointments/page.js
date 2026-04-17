@@ -517,6 +517,7 @@ const STAT_THEME = {
   green: { bg: "bg-green-50", iconBg: "bg-green-100  text-green-600", val: "text-green-700" },
   amber: { bg: "bg-amber-50", iconBg: "bg-amber-100  text-amber-600", val: "text-amber-700" },
   purple: { bg: "bg-purple-50", iconBg: "bg-purple-100 text-purple-600", val: "text-purple-700" },
+  cyan: { bg: "bg-cyan-50", iconBg: "bg-cyan-100 text-cyan-600", val: "text-cyan-700" },
 };
 
 function StatCard({ label, value, icon, color, loading }) {
@@ -540,7 +541,7 @@ export default function AppointmentsPage() {
   const [cancelling, setCancelling] = useState(null);
   const [selectedAppt, setSelectedAppt] = useState(null);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all"); // all, upcoming, past
+  const [filter, setFilter] = useState("all"); // all, upcoming, past, today
 
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
@@ -586,12 +587,21 @@ export default function AppointmentsPage() {
   };
 
   const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+
   const upcoming = appointments.filter(a => new Date(a.dateTime) >= now && a.status !== "cancelled" && a.status !== "rejected").sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
   const past = appointments.filter(a => new Date(a.dateTime) < now || a.status === "cancelled" || a.status === "rejected" || a.status === "cancellation_requested").sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+  const today = appointments.filter(a => {
+    const aptDate = new Date(a.dateTime);
+    return aptDate >= todayStart && aptDate < todayEnd && a.status !== "cancelled" && a.status !== "rejected";
+  }).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
 
-  const filteredAppointments = filter === "upcoming" ? upcoming : filter === "past" ? past : appointments;
+  const filteredAppointments = filter === "upcoming" ? upcoming : filter === "past" ? past : filter === "today" ? today : appointments;
   const totalUpcoming = upcoming.length;
   const totalPast = past.length;
+  const totalToday = today.length;
   const pendingCancellations = appointments.filter(a => a.status === "cancellation_requested").length;
   const totalRefunded = appointments.filter(a => a.status === "cancelled" && a.refundProcessedAt).length;
 
@@ -606,10 +616,11 @@ export default function AppointmentsPage() {
         <div className="relative max-w-5xl mx-auto">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div><h1 className="text-2xl sm:text-3xl font-extrabold text-white">My Appointments</h1><p className="text-blue-200 text-sm mt-1">View and manage all your healthcare appointments</p></div>
-            <Link href="/doctors" className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-blue-600 text-sm font-bold hover:bg-blue-50 shadow-lg transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>Book New</Link>
+            <Link href="/dashboard/doctors" className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-blue-600 text-sm font-bold hover:bg-blue-50 shadow-lg transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>Book New</Link>
           </div>
-          <div className="grid grid-cols-4 gap-3 mt-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mt-6">
             <StatCard loading={loading} label="Upcoming" value={totalUpcoming} color="blue" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
+            <StatCard loading={loading} label="Today" value={totalToday} color="cyan" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
             <StatCard loading={loading} label="Past" value={totalPast} color="purple" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
             <StatCard loading={loading} label="Pending Cancellations" value={pendingCancellations} color="amber" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
             <StatCard loading={loading} label="Refunds Processed" value={totalRefunded} color="green" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
@@ -623,20 +634,21 @@ export default function AppointmentsPage() {
         {pendingCancellations > 0 && (<div className="bg-amber-50 border border-amber-200 rounded-xl p-4"><div className="flex items-start gap-3"><svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><div><p className="text-sm font-bold text-amber-800">Cancellation Request Pending</p><p className="text-xs text-amber-700">You have {pendingCancellations} cancellation request{pendingCancellations !== 1 ? "s" : ""} awaiting admin approval. Refunds will be processed within 3-5 business days.</p></div></div></div>)}
 
         {/* Filter Tabs */}
-        <div className="flex gap-2 border-b border-gray-200">
-          <button onClick={() => setFilter("all")} className={`px-4 py-2 text-sm font-semibold transition-all ${filter === "all" ? "border-b-2 border-blue-500 text-white" : "text-white"}`}>All Appointments</button>
-          <button onClick={() => setFilter("upcoming")} className={`px-4 py-2 text-sm font-semibold transition-all ${filter === "upcoming" ? "border-b-2 border-blue-500 text-white" : "text-white"}`}>Upcoming</button>
-          <button onClick={() => setFilter("past")} className={`px-4 py-2 text-sm font-semibold transition-all ${filter === "past" ? "border-b-2 border-blue-500 text-white" : "text-white"}`}>Past & Cancelled</button>
+        <div className="flex gap-1 sm:gap-2 border-b border-gray-200 pb-2 overflow-x-auto">
+          <button onClick={() => setFilter("all")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "all" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-gray-500 hover:text-gray-700"}`}>All Appointments</button>
+          <button onClick={() => setFilter("upcoming")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "upcoming" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-gray-500 hover:text-gray-700"}`}>Upcoming</button>
+          <button onClick={() => setFilter("today")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "today" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-gray-500 hover:text-gray-700"}`}>Today</button>
+          <button onClick={() => setFilter("past")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "past" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-gray-500 hover:text-gray-700"}`}>Past & Cancelled</button>
         </div>
 
         {/* Appointments List */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-blue-50/40">
-            <div><h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">Appointments{filteredAppointments.length > 0 && <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">{filteredAppointments.length}</span>}</h2><p className="text-xs text-gray-400 mt-0.5">{filter === "all" ? "All your appointments" : filter === "upcoming" ? "Upcoming confirmed appointments" : "Past, cancelled, and refunded appointments"}</p></div>
+            <div><h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">Appointments{filteredAppointments.length > 0 && <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">{filteredAppointments.length}</span>}</h2><p className="text-xs text-gray-400 mt-0.5">{filter === "all" ? "All your appointments" : filter === "upcoming" ? "Upcoming confirmed appointments" : filter === "today" ? "Appointments scheduled for today" : "Past, cancelled, and refunded appointments"}</p></div>
             <button onClick={fetchAppointments} className="text-xs text-blue-600 font-bold hover:underline">Refresh</button>
           </div>
           <div className="p-4 space-y-3 max-h-[600px] overflow-y-auto">
-            {loading ? ([1, 2, 3].map((i) => (<div key={i} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 animate-pulse"><div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" /><div className="flex-1 space-y-2"><div className="h-3.5 w-32 bg-gray-200 rounded" /><div className="h-2.5 w-48 bg-gray-100 rounded" /></div></div>))) : filteredAppointments.length === 0 ? (<div className="flex flex-col items-center py-10 text-center"><div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-2xl mb-3">📅</div><p className="text-sm font-semibold text-gray-700">No appointments found</p><p className="text-xs text-gray-400 mt-1">Book a new appointment to get started</p><Link href="/doctors" className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Find a Doctor →</Link></div>) : (filteredAppointments.map((appt) => (<AppointmentCard key={appt._id} appt={appt} onClick={setSelectedAppt} />)))}
+            {loading ? ([1, 2, 3].map((i) => (<div key={i} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 animate-pulse"><div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" /><div className="flex-1 space-y-2"><div className="h-3.5 w-32 bg-gray-200 rounded" /><div className="h-2.5 w-48 bg-gray-100 rounded" /></div></div>))) : filteredAppointments.length === 0 ? (<div className="flex flex-col items-center py-10 text-center"><div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-2xl mb-3">📅</div><p className="text-sm font-semibold text-gray-700">No appointments found</p><p className="text-xs text-gray-400 mt-1">{filter === "today" ? "You have no appointments scheduled for today." : "Book a new appointment to get started"}</p><Link href="/dashboard/doctors" className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Find a Doctor →</Link></div>) : (filteredAppointments.map((appt) => (<AppointmentCard key={appt._id} appt={appt} onClick={setSelectedAppt} />)))}
           </div>
         </div>
       </div>

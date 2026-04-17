@@ -45,6 +45,10 @@ function AppointmentCard({ appt, onClick }) {
   const spec = appt.specialty || "";
   const dt = appt.dateTime || appt.date;
 
+  // Check if refund was processed
+  const hasRefund = appt.status === "cancelled" && appt.refundProcessedAt;
+  const isRejected = appt.status === "confirmed" && appt.refundRequested === true && !appt.refundProcessedAt;
+
   return (
     <button
       onClick={() => onClick(appt)}
@@ -65,12 +69,21 @@ function AppointmentCard({ appt, onClick }) {
         {appt.patientNumber && (
           <p className="text-[10px] text-gray-400 mt-1">Patient #{appt.patientNumber}</p>
         )}
-        {/* Show refund pending badge */}
+
+        {/* Status badges */}
         {appt.refundAmount > 0 && appt.status === "cancellation_requested" && (
           <div className="mt-2 px-2 py-1 bg-amber-50 border border-amber-100 rounded-lg inline-block">
-            <p className="text-[9px] text-amber-600">
-              Refund requested: Rs. {appt.refundAmount}
-            </p>
+            <p className="text-[9px] text-amber-600">Refund requested: Rs. {appt.refundAmount}</p>
+          </div>
+        )}
+        {hasRefund && (
+          <div className="mt-2 px-2 py-1 bg-green-50 border border-green-100 rounded-lg inline-block">
+            <p className="text-[9px] text-green-600">✓ Refund processed: Rs. {appt.refundAmount}</p>
+          </div>
+        )}
+        {isRejected && (
+          <div className="mt-2 px-2 py-1 bg-red-50 border border-red-100 rounded-lg inline-block">
+            <p className="text-[9px] text-red-600">✗ Cancellation rejected</p>
           </div>
         )}
       </div>
@@ -96,6 +109,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const router = useRouter();
   const [cancelStep, setCancelStep] = useState("view");
   const [reason, setReason] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -111,19 +125,90 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const docName = appt.doctorName || "Doctor";
   const dt = appt.dateTime || appt.date;
 
+  const handleJoinVideoConsultation = () => {
+    const id = appt._id ?? appt.id;
+    if (!id) return;
+    onClose();
+    router.push(`/dashboard/consultation/${id}`);
+  };
+
+  const handleDownloadReceipt = () => {
+    setDownloading(true);
+    try {
+      const hasRefund = appt.status === "cancelled" && appt.refundProcessedAt;
+      const isRejected = appt.status === "confirmed" && appt.refundRequested === true && !appt.refundProcessedAt;
+
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Appointment Receipt - ${appt._id}</title>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f5; padding: 40px; }
+          .receipt { max-width: 800px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #2563eb, #06b6d4); color: white; padding: 30px; text-align: center; }
+          .header h1 { margin: 0; font-size: 24px; }
+          .content { padding: 30px; }
+          .section { margin-bottom: 24px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; }
+          .section-title { font-size: 16px; font-weight: bold; color: #2563eb; margin-bottom: 12px; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+          .label { font-weight: 600; color: #6b7280; }
+          .value { color: #111827; }
+          .footer { background: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; }
+          .print-button { text-align: center; margin-top: 20px; padding: 20px; }
+          .print-button button { padding: 10px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin: 0 8px; }
+          @media print { body { background: white; padding: 0; } .print-button { display: none; } }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="header"><h1>🏥 Healthcare Appointment Receipt</h1><p>ID: ${appt._id?.slice(-12) || 'N/A'}</p></div>
+          <div class="content">
+            <div class="section"><div class="section-title">📋 Appointment Details</div>
+              <div class="row"><span class="label">Doctor:</span><span class="value">${appt.doctorName || 'N/A'}</span></div>
+              <div class="row"><span class="label">Specialty:</span><span class="value">${appt.specialty || 'N/A'}</span></div>
+              <div class="row"><span class="label">Date:</span><span class="value">${fmtDate(dt)}</span></div>
+              <div class="row"><span class="label">Time:</span><span class="value">${fmtTime(dt)}</span></div>
+              <div class="row"><span class="label">Status:</span><span class="value">${STATUS_STYLES[appt.status]?.label || appt.status || 'Confirmed'}</span></div>
+            </div>
+            <div class="section"><div class="section-title">💰 Payment Information</div>
+              <div class="row"><span class="label">Consultation Fee:</span><span class="value">Rs. ${appt.consultationFee?.toFixed(2) || '0.00'}</span></div>
+              <div class="row"><span class="label">Payment Status:</span><span class="value">${appt.paymentStatus === 'paid' ? '✅ Paid' : 'Pending'}</span></div>
+            </div>
+          </div>
+          <div class="footer"><p>Generated on: ${new Date().toLocaleString()}</p></div>
+        </div>
+        <div class="print-button"><button onclick="window.print()">📄 Save as PDF</button><button class="close-btn" onclick="window.close()">❌ Close</button></div>
+        <script>setTimeout(() => { window.print(); }, 500);</script>
+      </body>
+      </html>
+    `);
+      printWindow.document.close();
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const hasRefund = appt.status === "cancelled" && appt.refundProcessedAt;
+  const isRejected = appt.status === "confirmed" && appt.refundRequested === true && !appt.refundProcessedAt;
+
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
 
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-[scaleIn_0.2s_ease-out]">
-        {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white relative">
           <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-
           <div className="flex items-center gap-5">
             <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur shadow-inner flex items-center justify-center text-white text-3xl font-bold border border-white/30 overflow-hidden">
               {getInitials(docName)}
@@ -136,9 +221,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-8 space-y-8">
-          {/* Status and Time Row */}
+        <div className="p-8 space-y-8 max-h-[60vh] overflow-y-auto">
           <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between bg-slate-50 p-5 rounded-2xl border border-slate-100">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">When</p>
@@ -152,15 +235,9 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                 <span className={`w-2 h-2 rounded-full ${sc.dot}`} />
                 {sc.label}
               </span>
-              {appt.refundAmount > 0 && appt.status === "cancellation_requested" && (
-                <p className="text-[10px] text-amber-600 font-semibold mt-1">
-                  Refund: Rs. {appt.refundAmount} pending admin approval
-                </p>
-              )}
             </div>
           </div>
 
-          {/* Fee Display - Already Paid */}
           {appt.consultationFee > 0 && (
             <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100">
               <span className="text-sm font-semibold text-gray-700">Amount Paid</span>
@@ -168,7 +245,6 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
             </div>
           )}
 
-          {/* Reason for Visit */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,156 +253,35 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
               Reason for Visit
             </h3>
             <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-              <p className="text-sm text-slate-600 leading-relaxed italic">
-                {appt.reason || "No specific reason provided for this consultation."}
-              </p>
+              <p className="text-sm text-slate-600 leading-relaxed italic">{appt.reason || "No specific reason provided."}</p>
             </div>
           </div>
 
-          {/* Guest Info if applicable */}
-          {appt.isForSomeoneElse && appt.bookedFor?.name && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                Booked For
-              </h3>
-              <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100">
-                <p className="text-sm font-semibold text-purple-700">{appt.bookedFor.name}</p>
-                {appt.bookedFor.email && <p className="text-xs text-purple-500 mt-1">{appt.bookedFor.email}</p>}
-                {appt.bookedFor.age && <p className="text-xs text-purple-500">Age: {appt.bookedFor.age}</p>}
-              </div>
-            </div>
-          )}
-
-          {/* Actions */}
           <div className="space-y-3 pt-2">
-            {cancelStep === "view" ? (
-              <>
-                {status === "confirmed" && (
-                  <button
-                    onClick={() => router.push(`/dashboard/consultation/${appt._id}`)}
-                    className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-3 overflow-hidden group"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    Join Video Consultation
-                  </button>
-                )}
+            <button onClick={handleDownloadReceipt} disabled={downloading}
+              className="w-full py-3 rounded-2xl border-2 border-blue-200 text-blue-600 font-bold text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2">
+              {downloading ? (<svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>) : (<><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download Receipt</>)}
+            </button>
 
-                <div className="flex gap-3">
-                  {(status === "confirmed") && (
-                    <button
-                      onClick={() => setCancelStep("confirm")}
-                      className="flex-1 py-3.5 rounded-2xl border-2 border-slate-100 text-slate-400 text-xs font-bold hover:bg-red-50 hover:border-red-100 hover:text-red-500 transition-all flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      Cancel Appointment
-                    </button>
-                  )}
-                  <button
-                    onClick={onClose}
-                    className="flex-1 py-3.5 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all"
-                  >
-                    Close
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-4 animate-[slideUp_0.2s_ease-out]">
-                {/* Refund Information Display */}
-                <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
-                  <p className="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Refund Policy
-                  </p>
-                  <div className="space-y-1 text-xs text-amber-600">
-                    <p className="flex justify-between">
-                      <span>✓ 24+ hours before:</span>
-                      <span className="font-semibold">100% refund</span>
-                    </p>
-                    <p className="flex justify-between">
-                      <span>✓ 12-24 hours before:</span>
-                      <span className="font-semibold">50% refund</span>
-                    </p>
-                    <p className="flex justify-between">
-                      <span>✓ 6-12 hours before:</span>
-                      <span className="font-semibold">25% refund</span>
-                    </p>
-                    <p className="flex justify-between">
-                      <span>✗ Less than 6 hours:</span>
-                      <span className="font-semibold">No refund</span>
-                    </p>
-                  </div>
-                  <div className="mt-3 pt-2 border-t border-amber-200">
-                    <p className="text-[10px] text-amber-500">
-                      Refunds require admin approval and will be processed within 3-5 business days
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
-                    Please provide a reason for cancellation
-                  </label>
-                  <textarea
-                    autoFocus
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    placeholder="e.g., I have a personal emergency..."
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-200 transition-all resize-none h-24"
-                  />
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setCancelStep("view")}
-                    className="flex-1 py-3.5 rounded-2xl border border-slate-100 text-slate-500 text-xs font-bold hover:bg-slate-50 transition-all"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={() => onCancel(appt._id, reason)}
-                    disabled={cancelling === appt._id || !reason.trim()}
-                    className="flex-[2] py-3.5 rounded-2xl bg-red-600 text-white text-xs font-black shadow-lg shadow-red-200 hover:bg-red-700 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
-                  >
-                    {cancelling === appt._id ? (
-                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                      </svg>
-                    ) : (
-                      <>
-                        Request Cancellation
-                        {appt.consultationFee > 0 && (
-                          <span className="text-[10px] opacity-80">(Refund eligibility checked)</span>
-                        )}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+            {status === "confirmed" && (
+              <button onClick={handleJoinVideoConsultation} className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                Join Video Consultation
+              </button>
             )}
+
+            <div className="flex gap-3">
+              {(status === "confirmed") && (
+                <button onClick={() => setCancelStep("confirm")} className="flex-1 py-3.5 rounded-2xl border-2 border-slate-100 text-slate-400 text-xs font-bold hover:bg-red-50 hover:border-red-100 hover:text-red-500 transition-all flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  Cancel Appointment
+                </button>
+              )}
+              <button onClick={onClose} className="flex-1 py-3.5 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all">Close</button>
+            </div>
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>,
     document.body
   );
@@ -337,10 +292,11 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STAT_THEME = {
-  blue: { bg: "bg-blue-50", iconBg: "bg-blue-100   text-blue-600", val: "text-blue-700" },
-  green: { bg: "bg-green-50", iconBg: "bg-green-100  text-green-600", val: "text-green-700" },
-  amber: { bg: "bg-amber-50", iconBg: "bg-amber-100  text-amber-600", val: "text-amber-700" },
+  blue: { bg: "bg-blue-50", iconBg: "bg-blue-100 text-blue-600", val: "text-blue-700" },
+  green: { bg: "bg-green-50", iconBg: "bg-green-100 text-green-600", val: "text-green-700" },
+  amber: { bg: "bg-amber-50", iconBg: "bg-amber-100 text-amber-600", val: "text-amber-700" },
   purple: { bg: "bg-purple-50", iconBg: "bg-purple-100 text-purple-600", val: "text-purple-700" },
+  cyan: { bg: "bg-cyan-50", iconBg: "bg-cyan-100 text-cyan-600", val: "text-cyan-700" },
 };
 
 function StatCard({ label, value, icon, color, loading }) {
@@ -357,6 +313,28 @@ function StatCard({ label, value, icon, color, loading }) {
           : <p className={`text-2xl font-bold ${c.val}`}>{value ?? 0}</p>
         }
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FEATURE CARD COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FeatureCard({ emoji, title, description, color }) {
+  const colors = {
+    blue: "from-blue-50 to-blue-100 border-blue-200 text-blue-600",
+    green: "from-green-50 to-green-100 border-green-200 text-green-600",
+    purple: "from-purple-50 to-purple-100 border-purple-200 text-purple-600",
+    orange: "from-orange-50 to-orange-100 border-orange-200 text-orange-600",
+  };
+  const gradient = colors[color] || colors.blue;
+  
+  return (
+    <div className={`bg-gradient-to-br ${gradient} rounded-2xl p-5 border shadow-sm transition-all hover:shadow-md hover:-translate-y-1`}>
+      <div className="text-3xl mb-3">{emoji}</div>
+      <h3 className="text-sm font-bold text-gray-800 mb-1">{title}</h3>
+      <p className="text-xs text-gray-500 leading-relaxed">{description}</p>
     </div>
   );
 }
@@ -385,7 +363,7 @@ export default function PatientDashboard() {
     } catch (_) { router.replace("/login"); }
   }, [router]);
 
-  // Fetch appointments (including cancellation_requested)
+  // Fetch appointments (including cancellation_requested) - SAME AS APPOINTMENTS PAGE
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -405,13 +383,14 @@ export default function PatientDashboard() {
         all = [...all, ...pastData];
       }
 
-      // Filter: Show confirmed, completed, or cancellation_requested
-      const validAppointments = all.filter(a =>
-        a.status === "confirmed" || a.status === "completed" || a.status === "cancellation_requested"
+      // Show ALL appointments (confirmed, completed, cancelled, cancellation_requested)
+      // Same filtering as appointments page
+      const allAppointments = all.filter(a =>
+        a.status === "confirmed" || a.status === "completed" || a.status === "cancelled" || a.status === "cancellation_requested"
       );
 
-      validAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
-      setAppointments(validAppointments);
+      allAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+      setAppointments(allAppointments);
     } catch (err) {
       console.error("Fetch error:", err);
       setError("Unable to load appointments. Please refresh.");
@@ -430,11 +409,10 @@ export default function PatientDashboard() {
     try {
       const response = await axios.put(`${API_BASE}/appointments/${id}/cancel`, { reason }, { headers: authHeaders() });
 
-      // Show appropriate message based on refund eligibility
       if (response.data.refundAmount > 0) {
-        alert(`Cancellation request submitted!\n\nRefund Amount: Rs. ${response.data.refundAmount} (${response.data.refundPercentage}%)\n\nYour request has been sent to admin for approval. You will receive the refund within 3-5 business days after approval.`);
+        alert(`Cancellation request submitted!\n\nRefund Amount: Rs. ${response.data.refundAmount}\n\nYour request has been sent to admin for approval.`);
       } else {
-        alert(`Appointment cancelled successfully.\n\nNo refund applicable for this cancellation.`);
+        alert(`Appointment cancelled successfully.\n\nNo refund applicable.`);
       }
 
       await fetchAppointments();
@@ -448,30 +426,34 @@ export default function PatientDashboard() {
     }
   };
 
-  // Split appointments into upcoming and past
   const now = new Date();
-  const upcoming = appointments.filter(a => {
-    const aptDate = new Date(a.dateTime);
-    return aptDate >= now && a.status !== "cancelled" && a.status !== "rejected" && a.status !== "cancellation_requested";
-  }).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
 
-  const past = appointments.filter(a => {
+  // FIXED: Upcoming appointments - confirmed and not cancelled/rejected, future dates
+const upcoming = appointments
+  .filter(a => new Date(a.dateTime) >= now && a.status !== "cancelled" && a.status !== "rejected")
+  .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+const todayAppointments = appointments
+  .filter(a => {
     const aptDate = new Date(a.dateTime);
-    return aptDate < now || a.status === "cancelled" || a.status === "rejected" || a.status === "cancellation_requested";
-  }).sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+    return aptDate >= todayStart && aptDate < todayEnd && a.status !== "cancelled" && a.status !== "rejected";
+  })
+  .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+const past = appointments
+  .filter(a => new Date(a.dateTime) < now || a.status === "cancelled" || a.status === "rejected" || a.status === "cancellation_requested" || a.status === "completed")
+  .sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+  // FIXED: Pending cancellations - cancellation_requested status
+  const pendingCancellations = appointments.filter(a => a.status === "cancellation_requested").length;
+
+  // FIXED: Refunds processed - cancelled with refundProcessedAt
+  const totalRefunded = appointments.filter(a => a.status === "cancelled" && a.refundProcessedAt).length;
 
   const firstName = user?.name?.split(" ")[0] || "there";
   const today = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-
-  // Stats
-  const todayCount = upcoming.filter((a) => {
-    const d = new Date(a.dateTime);
-    return d.toDateString() === now.toDateString();
-  }).length;
-
-  const totalUpcoming = upcoming.length;
-  const totalCompleted = past.filter(a => a.status === "completed").length;
-  const pendingCancellations = appointments.filter(a => a.status === "cancellation_requested").length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50/50 to-blue-50/20">
@@ -484,62 +466,117 @@ export default function PatientDashboard() {
         cancelling={cancelling}
       />
 
-      {/* Hero header */}
-      <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-cyan-600 px-4 sm:px-6 pt-10 pb-28 relative overflow-hidden">
-        <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-white/5 blur-2xl" />
-        <div className="absolute bottom-0 left-10 w-32 h-32 rounded-full bg-cyan-400/10 blur-xl" />
+      {/* Hero Section - Booking Focused */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800">
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-20 left-10 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute bottom-20 right-10 w-96 h-96 bg-cyan-400/10 rounded-full blur-3xl animate-pulse delay-1000" />
+        </div>
 
-        <div className="relative max-w-5xl mx-auto flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <p className="text-blue-300 text-xs font-semibold uppercase tracking-widest mb-1">{today}</p>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white leading-tight">
-              Hello, {firstName}! 👋
+        <div className="relative px-4 sm:px-6 pt-12 pb-20">
+          <div className="max-w-5xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-6">
+              <span className="text-yellow-300 text-sm">👋</span>
+              <span className="text-white/90 text-sm font-medium">Welcome back, {firstName}!</span>
+              <span className="text-white/60 text-xs">{today}</span>
+            </div>
+
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white mb-4 leading-tight">
+              Your Health, <span className="text-cyan-300">Our Priority</span>
             </h1>
-            <p className="text-blue-200 text-sm mt-1.5">
-              {totalUpcoming > 0
-                ? `You have ${totalUpcoming} confirmed appointment${totalUpcoming !== 1 ? "s" : ""}`
-                : "No appointments scheduled — book one today"
-              }
+            <p className="text-blue-100 text-base sm:text-lg mb-8 max-w-2xl mx-auto">
+              Book appointments with top doctors in minutes. Video consultation available from the comfort of your home.
             </p>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <button onClick={fetchAppointments} disabled={loading}
-              className="p-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-colors" title="Refresh">
-              <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-            <Link href="/doctors"
-              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-blue-600 text-sm font-bold
-                hover:bg-blue-50 shadow-lg shadow-blue-900/20 transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Book Appointment
-            </Link>
+            <div className="max-w-2xl mx-auto mb-6">
+              <div className="bg-white rounded-2xl p-1.5 shadow-2xl flex flex-col sm:flex-row gap-2">
+                <div className="flex-1 relative">
+                  <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search by doctor name, specialty..."
+                    className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-200 text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onKeyDown={(e) => e.key === "Enter" && router.push("/dashboard/doctors")}
+                  />
+                </div>
+                <button
+                  onClick={() => router.push("/dashboard/doctors")}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white font-bold hover:from-blue-700 hover:to-cyan-600 transition-all shadow-lg flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  Find Doctors
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-4 text-blue-100 text-sm">
+              <div className="flex items-center gap-1.5"><svg className="w-4 h-4 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><span>Verified Doctors</span></div>
+              <div className="flex items-center gap-1.5"><svg className="w-4 h-4 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><span>Secure Payments</span></div>
+              <div className="flex items-center gap-1.5"><svg className="w-4 h-4 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg><span>Instant Confirmation</span></div>
+              <div className="flex items-center gap-1.5"><svg className="w-4 h-4 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636L9.172 14.828a4 4 0 01-5.656 0L2 13.5" /></svg><span>Free Cancellation*</span></div>
+            </div>
           </div>
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0">
+          <svg viewBox="0 0 1440 48" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-12 text-gray-50">
+            <path d="M0 48H1440V14C1440 6.268 1433.73 0 1426 0H14C6.268 0 0 6.268 0 14V48Z" fill="currentColor" />
+          </svg>
         </div>
       </div>
 
-      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 -mt-16 pb-12 space-y-6">
+      {/* Main Content Area */}
+      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 -mt-8 pb-12 space-y-6">
 
-        {/* Stat cards */}
+        {/* Why Choose Us - Feature Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <FeatureCard emoji="🏥" title="Top Verified Doctors" description="Handpicked specialists with years of experience" color="blue" />
+          <FeatureCard emoji="💳" title="Secure Payments" description="100% secure transactions with instant receipts" color="green" />
+          <FeatureCard emoji="🎥" title="Video Consultation" description="Connect with doctors from anywhere" color="purple" />
+          <FeatureCard emoji="🔄" title="Easy Cancellation" description="Cancel anytime with partial refunds" color="orange" />
+        </div>
+
+        {/* Quick Actions Bar */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Ready to book?</p>
+              <p className="text-sm font-bold text-gray-900">Find your perfect doctor today</p>
+            </div>
+          </div>
+          <Link href="/dashboard/doctors" className="px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all shadow-md flex items-center gap-2">
+            Book Appointment
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+        </div>
+
+        {/* Stat cards - FIXED with correct data */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-          <StatCard loading={loading} label="Confirmed" value={totalUpcoming} color="blue"
+          <StatCard loading={loading} label="Upcoming" value={upcoming.length} color="blue"
             icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
           />
-          <StatCard loading={loading} label="Today" value={todayCount} color="green"
+          <StatCard loading={loading} label="Today" value={todayAppointments.length} color="cyan"
             icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
           />
-          <StatCard loading={loading} label="Completed" value={totalCompleted} color="purple"
+          <StatCard loading={loading} label="Past" value={past.length} color="purple"
             icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-          />
-          <StatCard loading={loading} label="Total" value={appointments.length} color="amber"
-            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>}
           />
           <StatCard loading={loading} label="Pending Cancellations" value={pendingCancellations} color="amber"
             icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+          />
+          <StatCard loading={loading} label="Refunds Processed" value={totalRefunded} color="green"
+            icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
           />
         </div>
 
@@ -572,22 +609,21 @@ export default function PatientDashboard() {
           </div>
         )}
 
-        {/* Upcoming Appointments Section */}
+        {/* Upcoming Appointments Section - FIXED View All button to /dashboard/appointments */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-blue-50/40">
             <div>
               <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 Upcoming Appointments
-                {totalUpcoming > 0 && (
+                {upcoming.length > 0 && (
                   <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">
-                    {totalUpcoming}
+                    {upcoming.length}
                   </span>
                 )}
               </h2>
-              <p className="text-xs text-gray-400 mt-0.5">Confirmed & paid appointments</p>
+              <p className="text-xs text-gray-400 mt-0.5">Confirmed & upcoming appointments</p>
             </div>
-            <Link href="/appointments"
-              className="text-xs text-blue-600 font-bold hover:underline">
+            <Link href="/dashboard/appointments" className="text-xs text-blue-600 font-bold hover:underline">
               View All →
             </Link>
           </div>
@@ -607,7 +643,7 @@ export default function PatientDashboard() {
                 <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-2xl mb-3">📅</div>
                 <p className="text-sm font-semibold text-gray-700">No upcoming appointments</p>
                 <p className="text-xs text-gray-400 mt-1">Book a paid appointment to get started</p>
-                <Link href="/doctors" className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">
+                <Link href="/dashboard/doctors" className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">
                   Find a Doctor →
                 </Link>
               </div>
@@ -624,8 +660,8 @@ export default function PatientDashboard() {
           <h2 className="text-sm font-bold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Find a Doctor", href: "/doctors", emoji: "🔍", from: "from-blue-50", to: "to-blue-100", border: "border-blue-200", hover: "hover:border-blue-300" },
-              { label: "My Appointments", href: "/appointments", emoji: "📅", from: "from-green-50", to: "to-green-100", border: "border-green-200", hover: "hover:border-green-300" },
+              { label: "Find a Doctor", href: "/dashboard/doctors", emoji: "🔍", from: "from-blue-50", to: "to-blue-100", border: "border-blue-200", hover: "hover:border-blue-300" },
+              { label: "My Appointments", href: "/dashboard/appointments", emoji: "📅", from: "from-green-50", to: "to-green-100", border: "border-green-200", hover: "hover:border-green-300" },
               { label: "My Profile", href: "/dashboard/profile", emoji: "👤", from: "from-purple-50", to: "to-purple-100", border: "border-purple-200", hover: "hover:border-purple-300" },
               { label: "Medical Records", href: "/dashboard/reports", emoji: "📋", from: "from-amber-50", to: "to-amber-100", border: "border-amber-200", hover: "hover:border-amber-300" },
             ].map(({ label, href, emoji, from, to, border, hover }) => (

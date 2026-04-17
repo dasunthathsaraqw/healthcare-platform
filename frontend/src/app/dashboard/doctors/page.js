@@ -87,11 +87,11 @@ function avatarColor(name = "") {
 }
 
 const SPECIALTY_BADGES = {
-  Cardiologist: "bg-red-50   text-red-600   border-red-200",
-  Dermatologist: "bg-pink-50  text-pink-600  border-pink-200",
+  Cardiologist: "bg-red-50 text-red-600 border-red-200",
+  Dermatologist: "bg-pink-50 text-pink-600 border-pink-200",
   Neurologist: "bg-purple-50 text-purple-600 border-purple-200",
-  Pediatrician: "bg-blue-50  text-blue-600  border-blue-200",
-  Gynecologist: "bg-rose-50  text-rose-600  border-rose-200",
+  Pediatrician: "bg-blue-50 text-blue-600 border-blue-200",
+  Gynecologist: "bg-rose-50 text-rose-600 border-rose-200",
   Orthopedic: "bg-orange-50 text-orange-600 border-orange-200",
   "General Physician": "bg-green-50 text-green-600 border-green-200",
 };
@@ -130,10 +130,66 @@ function ToastContainer({ toasts, removeToast }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// COUNTDOWN TIMER COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CountdownTimer({ expiryTime, onExpire, compact = false }) {
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [isExpired, setIsExpired] = useState(false);
+
+  useEffect(() => {
+    if (!expiryTime) return;
+
+    const updateTimer = () => {
+      const remaining = expiryTime - Date.now();
+      if (remaining <= 0) {
+        setTimeLeft(null);
+        setIsExpired(true);
+        onExpire?.();
+        return;
+      }
+      const minutes = Math.floor(remaining / 60000);
+      const seconds = Math.floor((remaining % 60000) / 1000);
+      setTimeLeft(`${minutes}:${seconds.toString().padStart(2, "0")}`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [expiryTime, onExpire]);
+
+  if (!timeLeft && !isExpired) return null;
+  if (isExpired) return null;
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        <svg className="w-2.5 h-2.5 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span className="text-[9px] font-mono font-bold text-amber-700">{timeLeft}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 rounded-xl border border-amber-200">
+      <svg className="w-4 h-4 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <div>
+        <p className="text-[10px] text-amber-600 font-medium">Reservation expires in</p>
+        <p className="text-sm font-mono font-bold text-amber-700">{timeLeft}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // BOOKING CONFIRMATION MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 
-function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking }) {
+function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking, lockExpiryTime }) {
   const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
   const [guestInfo, setGuestInfo] = useState({ isForOthers: false, name: "", age: "", email: "" });
@@ -175,12 +231,27 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
         </div>
 
         <div className="p-6 space-y-4">
+          {lockExpiryTime && (
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-xs font-bold text-amber-700">Slot Reserved!</p>
+                  <p className="text-[10px] text-amber-600">Complete booking before timer expires</p>
+                </div>
+              </div>
+              <CountdownTimer expiryTime={lockExpiryTime} onExpire={onClose} />
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             {[
               ["Date", formattedDate],
               ["Time", slot.startTime],
               ["Duration", `${slot.slotDuration || 30} min`],
-              ["Fee", doctor.consultationFee ? `Rs. ${doctor.consultationFee}` : "Free"],
+              ["Fee", doctor.consultationFee ? `LKR ${doctor.consultationFee}` : "Free"],
             ].map(([label, val]) => (
               <div key={label} className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-3">
                 <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-0.5">{label}</p>
@@ -210,21 +281,21 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
                   <input type="text" placeholder="Patient's Name"
                     value={guestInfo.name}
                     onChange={(e) => setGuestInfo(p => ({ ...p, name: e.target.value }))}
-                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" />
+                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-black" />
                 </div>
                 <div>
                   <label className="block text-[9px] font-bold text-gray-500 uppercase mb-1">Age</label>
                   <input type="number" placeholder="Age"
                     value={guestInfo.age}
                     onChange={(e) => setGuestInfo(p => ({ ...p, age: e.target.value }))}
-                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" />
+                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-black" />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-[9px] font-bold text-gray-500 uppercase mb-1">Email (for PDF/Notifications)</label>
                   <input type="email" placeholder="patient@example.com"
                     value={guestInfo.email}
                     onChange={(e) => setGuestInfo(p => ({ ...p, email: e.target.value }))}
-                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs" />
+                    className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-black" />
                 </div>
               </div>
             )}
@@ -249,7 +320,7 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="text-xs text-amber-700">
-                Consultation fee of <strong>Rs. {doctor.consultationFee}</strong> will be collected via online payment
+                Consultation fee of <strong>LKR {doctor.consultationFee}</strong> will be collected via online payment
               </p>
             </div>
           )}
@@ -279,7 +350,7 @@ function BookingModal({ open, doctor, slot, date, onClose, onConfirm, booking })
 // PAYMENT SUMMARY MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
+function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying, lockExpiryTime }) {
   if (!open || !summaryData || typeof window === "undefined") return null;
 
   const { doctor, slot, date, bookingInfo, reservationId } = summaryData;
@@ -313,6 +384,21 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
         </div>
 
         <div className="p-6 space-y-4">
+          {lockExpiryTime && hasFee && (
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-amber-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm font-bold text-amber-700">Complete payment before timer expires!</p>
+                </div>
+                <CountdownTimer expiryTime={lockExpiryTime} onExpire={onClose} />
+              </div>
+              <p className="text-[10px] text-amber-600 mt-1">Slot will be released if payment not completed on time</p>
+            </div>
+          )}
+
           <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
             <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${avatarColor(doctor.name)} flex items-center justify-center text-white font-bold text-base shrink-0`}>
               {getInitials(doctor.name)}
@@ -337,7 +423,6 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
             ))}
           </div>
 
-          {/* Patient info summary */}
           <div className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">Patient</p>
             {bookingInfo?.isForSomeoneElse && bookingInfo?.bookedFor?.name ? (
@@ -372,7 +457,7 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
                 <div className="px-4 py-3 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Consultation Fee</span>
-                    <span className="font-semibold text-gray-900">Rs. {doctor.consultationFee.toFixed(2)}</span>
+                    <span className="font-semibold text-gray-900">LKR {doctor.consultationFee.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Service Charge</span>
@@ -380,7 +465,7 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
                   </div>
                   <div className="border-t border-dashed border-gray-200 pt-2 flex justify-between">
                     <span className="text-sm font-bold text-gray-900">Total</span>
-                    <span className="text-base font-extrabold text-blue-600">Rs. {doctor.consultationFee.toFixed(2)}</span>
+                    <span className="text-base font-extrabold text-blue-600">LKR {doctor.consultationFee.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -412,7 +497,7 @@ function PaymentSummaryModal({ open, summaryData, onClose, onPay, paying }) {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                       </svg>
-                      Pay Rs. {doctor.consultationFee.toFixed(2)}
+                      Pay LKR {doctor.consultationFee.toFixed(2)}
                     </>
                   )}
                 </button>
@@ -485,7 +570,7 @@ function BookingSuccess({ open, doctor, date, slot, onClose, onDashboard }) {
 // DOCTOR PROFILE MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DoctorProfileModal({ open, doctor, onClose, onBook }) {
+function DoctorProfileModal({ open, doctor, onClose, onBook, lockedSlots, onLockExpire }) {
   const [date, setDate] = useState("");
   const [slots, setSlots] = useState([]);
   const [loadSlots, setLoadSlots] = useState(false);
@@ -541,6 +626,23 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
 
   const rating = pseudoRating(doctor?.name || "");
 
+  // Check if a slot is locked (reserved by another user)
+  const isSlotLocked = (availabilityId, startTime) => {
+    if (!lockedSlots) return false;
+    const lock = lockedSlots.find(
+      l => l.availabilityId === availabilityId && l.startTime === startTime
+    );
+    return lock && lock.expiryTime > Date.now();
+  };
+
+  const getLockExpiry = (availabilityId, startTime) => {
+    if (!lockedSlots) return null;
+    const lock = lockedSlots.find(
+      l => l.availabilityId === availabilityId && l.startTime === startTime && l.expiryTime > Date.now()
+    );
+    return lock?.expiryTime || null;
+  };
+
   if (!open || !doctor || typeof window === "undefined") return null;
 
   return createPortal(
@@ -561,7 +663,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
             <div className="flex items-center gap-3 mt-1.5">
               <StarRating rating={rating} />
               {doctor.consultationFee > 0 && (
-                <span className="text-white/80 text-xs font-semibold">Rs. {doctor.consultationFee} / visit</span>
+                <span className="text-white/80 text-xs font-semibold">LKR {doctor.consultationFee} / visit</span>
               )}
             </div>
           </div>
@@ -674,24 +776,48 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                                 } else {
                                   isBooked = false;
                                 }
+                                
+                                const isLocked = isSlotLocked(slot._id, time);
+                                const lockExpiry = getLockExpiry(slot._id, time);
                                 const isSelected = selSlot?.availabilityId === slot._id && selSlot?.startTime === time;
 
+                                // IMPORTANT: Locked slots are DISABLED and NOT clickable
+                                const isDisabled = isBooked || isLocked;
+
                                 return (
-                                  <button key={`${slot._id}-${time}`}
-                                    onClick={() => !isBooked && setSelSlot({ availabilityId: slot._id, startTime: time, slotDuration: slot.slotDuration, patientNumber: idx + 1 })}
-                                    disabled={isBooked}
-                                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all flex flex-col items-center
+                                  <button 
+                                    key={`${slot._id}-${time}`}
+                                    onClick={() => {
+                                      if (!isDisabled) {
+                                        setSelSlot({ 
+                                          availabilityId: slot._id, 
+                                          startTime: time, 
+                                          slotDuration: slot.slotDuration, 
+                                          patientNumber: idx + 1 
+                                        });
+                                      }
+                                    }}
+                                    disabled={isDisabled}
+                                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all flex flex-col items-center relative min-h-[60px]
                                       ${isBooked
                                         ? "bg-red-50 text-red-300 border-red-100 cursor-not-allowed opacity-70"
-                                        : isSelected
-                                          ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
-                                          : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 cursor-pointer"
+                                        : isLocked
+                                          ? "bg-amber-50 text-amber-500 border-amber-200 cursor-not-allowed opacity-80"
+                                          : isSelected
+                                            ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200 scale-105"
+                                            : "bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 cursor-pointer"
                                       }`}>
                                     <span className={isBooked ? "line-through" : ""}>{time}</span>
-                                    {isBooked
-                                      ? <span className="text-[8px] text-red-300">Booked</span>
-                                      : <span className={`text-[8px] ${isSelected ? "text-blue-100" : "text-gray-400"}`}>#{idx + 1}</span>
-                                    }
+                                    {isBooked ? (
+                                      <span className="text-[8px] text-red-300 mt-1">Booked</span>
+                                    ) : isLocked && lockExpiry ? (
+                                      <>
+                                        <span className="text-[8px] text-amber-600 mt-1">Reserved</span>
+                                        <CountdownTimer expiryTime={lockExpiry} onExpire={() => onLockExpire?.(slot._id, time)} compact={true} />
+                                      </>
+                                    ) : (
+                                      <span className={`text-[8px] mt-1 ${isSelected ? "text-blue-100" : "text-gray-400"}`}>Available</span>
+                                    )}
                                   </button>
                                 );
                               })}
@@ -710,7 +836,6 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
                     <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                     <p className="text-xs text-blue-700 font-medium">
                       Selected: {new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} at {selSlot.startTime}
-                      {selSlot.patientNumber && ` (Patient #${selSlot.patientNumber})`}
                     </p>
                   </div>
                   <button onClick={() => onBook(doctor, selSlot, date)}
@@ -731,7 +856,7 @@ function DoctorProfileModal({ open, doctor, onClose, onBook }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DOCTOR CARD
+// DOCTOR CARD - WITH VIEW PROFILE AND BOOK NOW BUTTONS
 // ─────────────────────────────────────────────────────────────────────────────
 
 function DoctorCard({ doctor, onView }) {
@@ -760,7 +885,7 @@ function DoctorCard({ doctor, onView }) {
           </div>
           <div className="bg-green-50 rounded-xl py-2">
             <p className="text-sm font-bold text-green-600">
-              {doctor.consultationFee != null ? `Rs. ${doctor.consultationFee}` : "—"}
+              {doctor.consultationFee != null ? `LKR ${doctor.consultationFee}` : "—"}
             </p>
             <p className="text-[9px] text-green-400 font-semibold">Fee</p>
           </div>
@@ -821,6 +946,9 @@ export default function DoctorsPage() {
   const [successData, setSuccessData] = useState(null);
   const [booking, setBooking] = useState(false);
   const [paying, setPaying] = useState(false);
+  
+  const [lockedSlots, setLockedSlots] = useState([]);
+  const [currentLockExpiry, setCurrentLockExpiry] = useState(null);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -834,7 +962,28 @@ export default function DoctorsPage() {
   }, []);
   const removeToast = useCallback((id) => setToasts((p) => p.filter((t) => t.id !== id)), []);
 
-  // ── Search ──────────────────────────────────────────────────────────────────
+  const addSlotLock = useCallback((availabilityId, startTime) => {
+    const expiryTime = Date.now() + 10 * 60 * 1000;
+    setLockedSlots(prev => {
+      const filtered = prev.filter(l => !(l.availabilityId === availabilityId && l.startTime === startTime));
+      return [...filtered, { availabilityId, startTime, expiryTime }];
+    });
+    setCurrentLockExpiry(expiryTime);
+    return expiryTime;
+  }, []);
+
+  const removeSlotLock = useCallback((availabilityId, startTime) => {
+    setLockedSlots(prev => prev.filter(l => !(l.availabilityId === availabilityId && l.startTime === startTime)));
+    setCurrentLockExpiry(null);
+  }, []);
+
+  const handleLockExpire = useCallback((availabilityId, startTime) => {
+    removeSlotLock(availabilityId, startTime);
+    addToast("Slot reservation time expired. Please try booking again.", "info");
+    setBookingData(null);
+    setSummaryData(null);
+  }, [removeSlotLock, addToast]);
+
   const handleSearch = useCallback(async () => {
     setLoading(true);
     setSearched(true);
@@ -854,21 +1003,17 @@ export default function DoctorsPage() {
     }
   }, [nameQ, specialtyQ, dateQ, addToast]);
 
-  useEffect(() => { handleSearch(); }, []); // eslint-disable-line
+  useEffect(() => { handleSearch(); }, []);
 
-  // ── Step 1: Reserve slot (creates DB hold + lock) ───────────────────────────
   const handleBookConfirm = async ({ reason, isForOthers, guestInfo }) => {
     const { doctor, slot, date } = bookingData;
     setBooking(true);
 
-    // ✅ Read logged-in user ONCE here so it's always correct
     const currentUser = getCurrentUser();
     const loggedInName = currentUser.name || "";
     const loggedInEmail = currentUser.email || "";
 
     try {
-      // The person paying/booking is always the logged-in user (patientName).
-      // bookedFor is who the appointment is FOR (may differ if booking for someone else).
       const payload = {
         doctorId: doctor._id,
         doctorName: doctor.name,
@@ -876,7 +1021,6 @@ export default function DoctorsPage() {
         consultationFee: doctor.consultationFee,
         dateTime: `${date}T${slot.startTime}:00`,
         reason,
-        // ✅ Always send logged-in user as patientName so DB saves correctly
         patientName: loggedInName,
         patientEmail: loggedInEmail,
         isForSomeoneElse: isForOthers,
@@ -907,7 +1051,6 @@ export default function DoctorsPage() {
           reservationId,
           bookingInfo: {
             isForSomeoneElse: isForOthers,
-            // ✅ Pass logged-in user so PaymentSummaryModal can show correct name
             loggedInUser: { name: loggedInName, email: loggedInEmail },
             bookedFor: isForOthers
               ? { name: guestInfo.name, age: guestInfo.age, email: guestInfo.email }
@@ -916,43 +1059,40 @@ export default function DoctorsPage() {
         });
         addToast("Slot reserved! Please complete payment within 10 minutes.", "info");
       } else {
-        // Free appointment — create immediately
         await axios.post(
           `${API_BASE}/appointments/create-from-reservation`,
           { reservationId, paymentId: "free_appointment" },
           { headers: authHeaders() }
         );
+        removeSlotLock(slot.availabilityId, slot.startTime);
         setSuccessData({ doctor, slot, date });
         addToast("Appointment booked successfully!", "success");
       }
     } catch (err) {
       console.error("Booking error:", err);
+      removeSlotLock(slot.availabilityId, slot.startTime);
       addToast(err.response?.data?.message || "Booking failed. Please try again.", "error");
     } finally {
       setBooking(false);
     }
   };
 
-  // ── Step 2: Initiate PayHere payment ───────────────────────────────────────
   const handleProceedToPayment = async () => {
     if (!summaryData) return;
     setPaying(true);
     try {
       const { doctor, reservationId, bookingInfo } = summaryData;
 
-      // ✅ Determine correct patient name/email for PayHere form
-      // PayHere shows these on the payment page — use the person who is actually paying
-      // (the logged-in user), NOT the guest (bookedFor)
       const payerName = bookingInfo.loggedInUser?.name || "";
       const payerEmail = bookingInfo.loggedInUser?.email || "";
 
       const { data } = await axios.post(
         `${API_BASE}/payments/initiate`,
         {
-          appointmentId: reservationId,   // backend uses this as the key
-          reservationId,                  // also send explicitly for metadata
+          appointmentId: reservationId,
+          reservationId,
           amount: doctor.consultationFee,
-          patientName: payerName,       // payer = logged-in user
+          patientName: payerName,
           patientEmail: payerEmail,
         },
         { headers: authHeaders() }
@@ -964,7 +1104,6 @@ export default function DoctorsPage() {
           localStorage.setItem("lastReservationId", reservationId);
         }
 
-        // Build and submit hidden form to PayHere
         const form = document.createElement("form");
         form.method = "POST";
         form.action = data.checkoutUrl;
@@ -981,8 +1120,7 @@ export default function DoctorsPage() {
         });
 
         document.body.appendChild(form);
-        console.log("🚀 Submitting to PayHere:", data.checkoutUrl);
-        form.submit(); // browser navigates away
+        form.submit();
       } else {
         throw new Error("Invalid payment response from server");
       }
@@ -991,23 +1129,55 @@ export default function DoctorsPage() {
       addToast(err.response?.data?.message || "Payment failed. Please try again.", "error");
       setPaying(false);
     }
-    // ✅ Do NOT call setPaying(false) on success — browser is navigating away
   };
 
   const handleOpenBook = (doctor, slot, date) => {
+    const expiry = addSlotLock(slot.availabilityId, slot.startTime);
     setProfileDoc(null);
-    setBookingData({ doctor, slot, date });
+    setBookingData({ doctor, slot, date, lockExpiry: expiry });
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
       {mounted && (
         <>
           <ToastContainer toasts={toasts} removeToast={removeToast} />
-          <DoctorProfileModal open={!!profileDoc} doctor={profileDoc} onClose={() => setProfileDoc(null)} onBook={handleOpenBook} />
-          <BookingModal open={!!bookingData} doctor={bookingData?.doctor} slot={bookingData?.slot} date={bookingData?.date} onClose={() => setBookingData(null)} onConfirm={handleBookConfirm} booking={booking} />
-          <PaymentSummaryModal open={!!summaryData} summaryData={summaryData} onClose={() => setSummaryData(null)} onPay={handleProceedToPayment} paying={paying} />
+          <DoctorProfileModal 
+            open={!!profileDoc} 
+            doctor={profileDoc} 
+            onClose={() => setProfileDoc(null)} 
+            onBook={handleOpenBook}
+            lockedSlots={lockedSlots}
+            onLockExpire={handleLockExpire}
+          />
+          <BookingModal 
+            open={!!bookingData} 
+            doctor={bookingData?.doctor} 
+            slot={bookingData?.slot} 
+            date={bookingData?.date} 
+            onClose={() => {
+              if (bookingData?.slot) {
+                removeSlotLock(bookingData.slot.availabilityId, bookingData.slot.startTime);
+              }
+              setBookingData(null);
+            }} 
+            onConfirm={handleBookConfirm} 
+            booking={booking}
+            lockExpiryTime={bookingData?.lockExpiry}
+          />
+          <PaymentSummaryModal 
+            open={!!summaryData} 
+            summaryData={summaryData} 
+            onClose={() => {
+              if (summaryData?.slot) {
+                removeSlotLock(summaryData.slot.availabilityId, summaryData.slot.startTime);
+              }
+              setSummaryData(null);
+            }} 
+            onPay={handleProceedToPayment} 
+            paying={paying}
+            lockExpiryTime={currentLockExpiry}
+          />
           <BookingSuccess open={!!successData} doctor={successData?.doctor} date={successData?.date} slot={successData?.slot} onClose={() => setSuccessData(null)} onDashboard={() => router.push("/dashboard/appointments")} />
         </>
       )}
@@ -1058,7 +1228,7 @@ export default function DoctorsPage() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 -mt-8 pb-12">
           <div className="flex items-center justify-between mb-5">
-            <p className="text-sm font-semibold text-gray-700">
+            <p className="text-sm font-semibold text-white">
               {loading ? "Searching…" : `${doctors.length} doctor${doctors.length !== 1 ? "s" : ""} found`}
             </p>
             {(nameQ || specialtyQ !== "All Specialties" || dateQ) && (
