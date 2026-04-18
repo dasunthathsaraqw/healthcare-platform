@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
 
-
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
 
 function authHeaders() {
@@ -30,7 +29,6 @@ function getInitials(name = "") {
   return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "DR";
 }
 
-// Updated status styles
 const STATUS_STYLES = {
   confirmed: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", dot: "bg-blue-500", label: "Confirmed" },
   completed: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", dot: "bg-green-500", label: "Completed" },
@@ -39,29 +37,318 @@ const STATUS_STYLES = {
   cancellation_requested: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", dot: "bg-amber-500", label: "Cancellation Requested" },
 };
 
-function AppointmentCard({ appt, onClick }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// HOOKS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function useNow(intervalMs = 10_000) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+// Pure function — NOT a hook. Safe to call anywhere including inside .map()
+function getAppointmentPhase(appt, now) {
+  if (!appt?.dateTime || appt.status !== "confirmed") return { phase: "none" };
+
+  const apptTime = new Date(appt.dateTime);
+  const SLOT_MIN = 30;
+  const endTime = new Date(apptTime.getTime() + SLOT_MIN * 60_000);
+  const diffMs = apptTime - now;
+  const diffMin = Math.round(diffMs / 60_000);
+
+  if (now >= endTime) return { phase: "done" };
+  if (now >= apptTime && now < endTime) return { phase: "active", elapsed: Math.floor((now - apptTime) / 60_000), remaining: Math.ceil((endTime - now) / 60_000) };
+  if (diffMin <= 15) return { phase: "imminent", diffMin };
+  if (diffMin <= 60) return { phase: "soon", diffMin };
+  return { phase: "upcoming", diffMin };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIVE APPOINTMENT PANEL (used in Today section)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function LiveAppointmentPanel({ appt, now, onClick }) {
+  const { phase, diffMin, elapsed, remaining } = getAppointmentPhase(appt, now);
+  const docName = appt.doctorName || "Doctor";
+  const dt = appt.dateTime || appt.date;
+  const SLOT_MIN = 30;
+  const apptTime = new Date(dt);
+  const endTime = new Date(apptTime.getTime() + SLOT_MIN * 60_000);
+
+  const progressPct =
+    phase === "active" ? Math.min(100, Math.round(((now - apptTime) / (endTime - apptTime)) * 100))
+      : phase === "done" ? 100
+        : 0;
+
+  const theme = {
+    active: { outer: "border-green-300 bg-green-50", bar: "bg-green-500", badge: "bg-green-500 text-white", label: "In Progress", icon: "🟢" },
+    imminent: { outer: "border-amber-300 bg-amber-50", bar: "bg-amber-400", badge: "bg-amber-500 text-white", label: "Starting Soon", icon: "⏳" },
+    soon: { outer: "border-blue-200 bg-blue-50", bar: "bg-blue-400", badge: "bg-blue-100 text-blue-700", label: "Upcoming Today", icon: "📅" },
+    upcoming: { outer: "border-gray-200 bg-white", bar: "bg-gray-300", badge: "bg-gray-100 text-gray-600", label: "Later Today", icon: "🕐" },
+    done: { outer: "border-gray-200 bg-gray-50", bar: "bg-gray-300", badge: "bg-gray-200 text-gray-500", label: "Slot Ended", icon: "✓" },
+    none: { outer: "border-gray-200 bg-white", bar: "bg-gray-200", badge: "bg-gray-100 text-gray-500", label: "Confirmed", icon: "📋" },
+  }[phase] || {};
+
+  const statusText = {
+    active: `In session · ${elapsed === 0 ? "just started" : `${elapsed} min elapsed`} · ${remaining} min left`,
+    imminent: diffMin <= 1 ? "Starting right now!" : `Starts in ${diffMin} minute${diffMin !== 1 ? "s" : ""}`,
+    soon: `Starts in ${diffMin} minutes`,
+    upcoming: `Starts in ${Math.floor(diffMin / 60)}h ${diffMin % 60}m`,
+    done: "Appointment slot has ended",
+    none: "Scheduled",
+  }[phase] || "";
+
+  return (
+    <button
+      onClick={() => onClick(appt)}
+      className={`w-full text-left rounded-2xl border-2 ${theme.outer} p-5 transition-all hover:shadow-md group`}
+    >
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {/* Avatar with live indicator */}
+          <div className="relative shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white text-base font-bold shadow-sm">
+              {getInitials(docName)}
+            </div>
+            {phase === "active" && (
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-white">
+                <span className="absolute inset-0 rounded-full bg-green-400 animate-ping" />
+              </span>
+            )}
+            {phase === "imminent" && (
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-white animate-pulse" />
+            )}
+          </div>
+
+          {/* Doctor + patient info */}
+          <div>
+            <p className="text-sm font-extrabold text-gray-900">Dr. {docName}</p>
+            {appt.specialty && <p className="text-xs text-gray-500">{appt.specialty}</p>}
+            {appt.patientNumber && (
+              <p className="text-[11px] font-semibold text-blue-600 mt-0.5">
+                Patient #{appt.patientNumber}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Right side badge + time range */}
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${theme.badge} flex items-center gap-1.5`}>
+            {phase === "active" && (
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse inline-block" />
+            )}
+            {theme.label}
+          </span>
+          <p className="text-[10px] text-gray-400 font-medium">
+            {fmtTime(dt)} – {fmtTime(endTime)}
+          </p>
+        </div>
+      </div>
+
+      {/* Status message row */}
+      <div className={`mt-4 flex items-center gap-2 text-xs font-semibold
+        ${phase === "active" ? "text-green-700" :
+          phase === "imminent" ? "text-amber-700" :
+            phase === "soon" ? "text-blue-700" : "text-gray-500"}`}
+      >
+        <span className="text-sm leading-none">{theme.icon}</span>
+        <span>{statusText}</span>
+        {phase === "active" && (
+          <span className="ml-auto text-[10px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
+            {progressPct}% done
+          </span>
+        )}
+      </div>
+
+      {/* Progress bar — active & done */}
+      {(phase === "active" || phase === "done") && (
+        <div className="mt-3">
+          <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ${theme.bar}`}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Countdown bar — imminent */}
+      {phase === "imminent" && (
+        <div className="mt-3">
+          <div className="w-full h-1.5 bg-amber-100 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-amber-400 transition-all duration-1000"
+              style={{ width: `${Math.max(5, 100 - (diffMin / 15) * 100)}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-amber-600 mt-1.5 text-right font-medium">
+            Prepare to join your video consultation
+          </p>
+        </div>
+      )}
+
+      {/* Join hint — active only */}
+      {phase === "active" && (
+        <div className="mt-3 pt-3 border-t border-green-200 flex items-center justify-between">
+          <p className="text-[11px] text-green-600 font-semibold">
+            Click to view details & join video call
+          </p>
+          <svg
+            className="w-4 h-4 text-green-500 group-hover:translate-x-0.5 transition-transform"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      )}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TODAY'S APPOINTMENTS SECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+function TodayAppointmentsSection({ appointments, now, onClick }) {
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart.getTime() + 86_400_000);
+
+  const todayAppts = appointments
+    .filter(a => {
+      const d = new Date(a.dateTime);
+      return (
+        d >= todayStart &&
+        d < todayEnd &&
+        (a.status === "confirmed" || a.status === "cancellation_requested")
+      );
+    })
+    .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+  if (todayAppts.length === 0) return null;
+
+  // Safe to call getAppointmentPhase (pure function) inside map — no hook violation
+  const phases = todayAppts.map(a => getAppointmentPhase(a, now).phase);
+  const activeCount = phases.filter(p => p === "active").length;
+  const imminentCount = phases.filter(p => p === "imminent").length;
+
+  const headerBg =
+    activeCount > 0 ? "bg-green-50 border-green-100" :
+      imminentCount > 0 ? "bg-amber-50 border-amber-100" :
+        "bg-blue-50/40 border-gray-100";
+
+  const countBg =
+    activeCount > 0 ? "bg-green-500" :
+      imminentCount > 0 ? "bg-amber-500" :
+        "bg-blue-600";
+
+  const subtext =
+    activeCount > 0
+      ? `${activeCount} appointment${activeCount > 1 ? "s" : ""} in progress right now`
+      : imminentCount > 0
+        ? "An appointment is starting soon — get ready"
+        : `${todayAppts.length} appointment${todayAppts.length > 1 ? "s" : ""} scheduled for today`;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className={`flex items-center justify-between px-5 py-4 border-b ${headerBg}`}>
+        <div className="flex items-center gap-3">
+          {activeCount > 0 && (
+            <span className="relative flex h-3 w-3 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
+            </span>
+          )}
+          {imminentCount > 0 && activeCount === 0 && (
+            <span className="relative flex h-3 w-3 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+            </span>
+          )}
+          <div>
+            <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              Today's Appointments
+              <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white ${countBg}`}>
+                {todayAppts.length}
+              </span>
+            </h2>
+            <p className="text-xs text-gray-400 mt-0.5">{subtext}</p>
+          </div>
+        </div>
+
+        {/* Live clock */}
+        <div className="text-right shrink-0">
+          <p className="text-sm font-bold text-gray-700">
+            {now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+          </p>
+          <p className="text-[10px] text-gray-400">
+            {now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+          </p>
+        </div>
+      </div>
+
+      {/* Panels */}
+      <div className="p-4 space-y-3">
+        {todayAppts.map(appt => (
+          <LiveAppointmentPanel
+            key={appt._id}
+            appt={appt}
+            now={now}
+            onClick={onClick}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APPOINTMENT CARD (list view)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AppointmentCard({ appt, onClick, now }) {
+  const { phase } = getAppointmentPhase(appt, now);
   const status = appt.status || "confirmed";
   const sc = STATUS_STYLES[status] || STATUS_STYLES.confirmed;
   const docName = appt.doctorName || "Doctor";
   const spec = appt.specialty || "";
   const dt = appt.dateTime || appt.date;
 
-  // Check if refund was processed
   const hasRefund = appt.status === "cancelled" && appt.refundProcessedAt;
   const isRejected = appt.status === "confirmed" && appt.refundRequested === true && !appt.refundProcessedAt;
 
   return (
     <button
       onClick={() => onClick(appt)}
-      className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all p-4 flex items-center gap-3 group"
+      className={`w-full text-left bg-white rounded-xl border shadow-sm hover:shadow-md transition-all p-4 flex items-center gap-3 group
+        ${phase === "active" ? "border-green-300 ring-1 ring-green-200 bg-green-50/20" :
+          phase === "imminent" ? "border-amber-200 bg-amber-50/20" :
+            "border-gray-100 hover:border-blue-100"}`}
     >
-      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-        {getInitials(docName)}
+      {/* Avatar */}
+      <div className="relative shrink-0">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white text-sm font-bold shadow-sm group-hover:scale-105 transition-transform">
+          {getInitials(docName)}
+        </div>
+        {phase === "active" && (
+          <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-white">
+            <span className="absolute inset-0 rounded-full bg-green-400 animate-ping" />
+          </span>
+        )}
+        {phase === "imminent" && (
+          <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white animate-pulse" />
+        )}
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-bold text-gray-900 truncate">{docName}</p>
+          <p className="text-sm font-bold text-gray-900 truncate">Dr. {docName}</p>
           {spec && <span className="text-[10px] text-gray-400 font-medium hidden sm:inline">{spec}</span>}
         </div>
         <p className="text-xs text-gray-500 mt-0.5">
@@ -71,7 +358,21 @@ function AppointmentCard({ appt, onClick }) {
           <p className="text-[10px] text-gray-400 mt-1">Patient #{appt.patientNumber}</p>
         )}
 
-        {/* Status badges */}
+        {/* Live badges */}
+        {phase === "active" && (
+          <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 bg-green-100 border border-green-200 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            <p className="text-[10px] font-bold text-green-700">In progress</p>
+          </div>
+        )}
+        {phase === "imminent" && (
+          <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            <p className="text-[10px] font-bold text-amber-700">Starting soon</p>
+          </div>
+        )}
+
+        {/* Refund / rejection badges */}
         {appt.refundAmount > 0 && appt.status === "cancellation_requested" && (
           <div className="mt-2 px-2 py-1 bg-amber-50 border border-amber-100 rounded-lg inline-block">
             <p className="text-[9px] text-amber-600">Refund requested: Rs. {appt.refundAmount}</p>
@@ -90,10 +391,17 @@ function AppointmentCard({ appt, onClick }) {
       </div>
 
       <div className="flex flex-col items-end gap-1.5 shrink-0">
-        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${sc.bg} ${sc.text} ${sc.border}`}>
-          <span className={`inline-block w-1.5 h-1.5 rounded-full ${sc.dot} mr-1`} />
-          {sc.label}
-        </span>
+        {phase === "active" ? (
+          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            Live
+          </span>
+        ) : (
+          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${sc.bg} ${sc.text} ${sc.border}`}>
+            <span className={`inline-block w-1.5 h-1.5 rounded-full ${sc.dot} mr-1`} />
+            {sc.label}
+          </span>
+        )}
         <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
         </svg>
@@ -103,7 +411,7 @@ function AppointmentCard({ appt, onClick }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// APPOINTMENT DETAIL MODAL (with Download & Refund Details)
+// APPOINTMENT DETAIL MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
@@ -113,10 +421,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      setCancelStep("view");
-      setReason("");
-    }
+    if (open) { setCancelStep("view"); setReason(""); }
   }, [open, appt]);
 
   if (!open || !appt || typeof window === "undefined") return null;
@@ -126,7 +431,17 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
   const docName = appt.doctorName || "Doctor";
   const dt = appt.dateTime || appt.date;
 
-  /** In-app video room (same as dashboard) — not external meetingLink */
+  // Derive isToday from appointment date vs current date
+  const apptDate = new Date(dt);
+  const nowDate = new Date();
+  const isToday =
+    apptDate.getFullYear() === nowDate.getFullYear() &&
+    apptDate.getMonth() === nowDate.getMonth() &&
+    apptDate.getDate() === nowDate.getDate();
+
+  const hasRefund = appt.status === "cancelled" && appt.refundProcessedAt;
+  const isRejected = appt.status === "confirmed" && appt.refundRequested === true && !appt.refundProcessedAt;
+
   const handleJoinVideoConsultation = () => {
     const id = appt._id ?? appt.id;
     if (!id) return;
@@ -134,162 +449,70 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
     router.push(`/dashboard/consultation/${id}`);
   };
 
-
-  // In AppointmentDetailModal component
-  // In AppointmentDetailModal component, replace the handleDownloadReceipt function with this:
-
   const handleDownloadReceipt = () => {
     setDownloading(true);
     try {
-      const hasRefund = appt.status === "cancelled" && appt.refundProcessedAt;
-      const isRejected = appt.status === "confirmed" && appt.refundRequested === true && !appt.refundProcessedAt;
-
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open("", "_blank");
       printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
+        <!DOCTYPE html><html><head>
         <title>Appointment Receipt - ${appt._id}</title>
         <meta charset="UTF-8">
         <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background: #f5f5f5;
-            padding: 40px;
-          }
-          .receipt {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-          }
-          .header {
-            background: linear-gradient(135deg, #2563eb, #06b6d4);
-            color: white;
-            padding: 30px;
-            text-align: center;
-          }
-          .header h1 { margin: 0; font-size: 24px; }
-          .header p { margin: 8px 0 0; opacity: 0.9; }
-          .content { padding: 30px; }
-          .section { margin-bottom: 24px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; }
-          .section-title { font-size: 16px; font-weight: bold; color: #2563eb; margin-bottom: 12px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
-          .label { font-weight: 600; color: #6b7280; }
-          .value { color: #111827; }
-          .status {
-            display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;
-          }
-          .status-confirmed { background: #dbeafe; color: #1e40af; }
-          .status-completed { background: #dcfce7; color: #166534; }
-          .status-cancelled { background: #f3f4f6; color: #374151; }
-          .status-cancellation_requested { background: #fef3c7; color: #92400e; }
-          .refund-box { background: #fef3c7; border-radius: 12px; padding: 16px; margin-top: 16px; }
-          .refund-processed { background: #dcfce7; }
-          .refund-rejected { background: #fee2e2; }
-          .footer {
-            background: #f9fafb;
-            padding: 20px;
-            text-align: center;
-            font-size: 12px;
-            color: #6b7280;
-            border-top: 1px solid #e5e7eb;
-          }
-          .print-button {
-            text-align: center;
-            margin-top: 20px;
-            padding: 20px;
-          }
-          .print-button button {
-            padding: 10px 24px;
-            background: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            margin: 0 8px;
-          }
-          .print-button button:hover { background: #1d4ed8; }
-          .print-button button.close-btn { background: #6b7280; }
-          .print-button button.close-btn:hover { background: #4b5563; }
-          @media print {
-            body { background: white; padding: 0; }
-            .print-button { display: none; }
-            .receipt { box-shadow: none; margin: 0; }
-          }
-        </style>
-      </head>
-      <body>
+          *{margin:0;padding:0;box-sizing:border-box}
+          body{font-family:'Segoe UI',Arial,sans-serif;background:#f5f5f5;padding:40px}
+          .receipt{max-width:800px;margin:0 auto;background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)}
+          .header{background:linear-gradient(135deg,#2563eb,#06b6d4);color:white;padding:30px;text-align:center}
+          .header h1{margin:0;font-size:24px}.header p{margin:8px 0 0;opacity:.9}
+          .content{padding:30px}
+          .section{margin-bottom:24px;border-bottom:1px solid #e5e7eb;padding-bottom:16px}
+          .section-title{font-size:16px;font-weight:bold;color:#2563eb;margin-bottom:12px}
+          .row{display:flex;justify-content:space-between;margin-bottom:8px;font-size:14px}
+          .label{font-weight:600;color:#6b7280}.value{color:#111827}
+          .status{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:bold}
+          .status-confirmed{background:#dbeafe;color:#1e40af}
+          .status-completed{background:#dcfce7;color:#166534}
+          .status-cancelled{background:#f3f4f6;color:#374151}
+          .status-cancellation_requested{background:#fef3c7;color:#92400e}
+          .refund-box{background:#fef3c7;border-radius:12px;padding:16px;margin-top:16px}
+          .footer{background:#f9fafb;padding:20px;text-align:center;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb}
+          .print-button{text-align:center;margin-top:20px;padding:20px}
+          .print-button button{padding:10px 24px;background:#2563eb;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin:0 8px}
+          .print-button button.close-btn{background:#6b7280}
+          @media print{body{background:white;padding:0}.print-button{display:none}.receipt{box-shadow:none;margin:0}}
+        </style></head><body>
         <div class="receipt">
           <div class="header">
             <h1>🏥 Healthcare Appointment Receipt</h1>
-            <p>Appointment ID: ${appt._id?.slice(-12) || 'N/A'}</p>
+            <p>Appointment ID: ${appt._id?.slice(-12) || "N/A"}</p>
           </div>
           <div class="content">
             <div class="section">
               <div class="section-title">📋 Appointment Details</div>
-              <div class="row"><span class="label">Doctor:</span><span class="value">${appt.doctorName || 'N/A'}</span></div>
-              <div class="row"><span class="label">Specialty:</span><span class="value">${appt.specialty || 'N/A'}</span></div>
+              <div class="row"><span class="label">Doctor:</span><span class="value">Dr. ${appt.doctorName || "N/A"}</span></div>
+              <div class="row"><span class="label">Specialty:</span><span class="value">${appt.specialty || "N/A"}</span></div>
               <div class="row"><span class="label">Date:</span><span class="value">${fmtDate(dt)}</span></div>
               <div class="row"><span class="label">Time:</span><span class="value">${fmtTime(dt)}</span></div>
-              <div class="row"><span class="label">Patient Number:</span><span class="value">${appt.patientNumber || 'N/A'}</span></div>
-              <div class="row"><span class="label">Status:</span><span class="value"><span class="status status-${appt.status || 'confirmed'}">${STATUS_STYLES[appt.status]?.label || appt.status || 'Confirmed'}</span></span></div>
+              <div class="row"><span class="label">Patient Number:</span><span class="value">${appt.patientNumber || "N/A"}</span></div>
+              <div class="row"><span class="label">Status:</span><span class="value"><span class="status status-${appt.status || "confirmed"}">${STATUS_STYLES[appt.status]?.label || appt.status || "Confirmed"}</span></span></div>
             </div>
-
             <div class="section">
               <div class="section-title">👤 Patient Information</div>
-              <div class="row"><span class="label">Patient Name:</span><span class="value">${appt.patientName || 'N/A'}</span></div>
-              ${appt.isForSomeoneElse && appt.bookedFor?.name ? `<div class="row"><span class="label">Booked For:</span><span class="value">${appt.bookedFor.name} ${appt.bookedFor.age ? `(Age: ${appt.bookedFor.age})` : ''}</span></div>` : ''}
+              <div class="row"><span class="label">Patient Name:</span><span class="value">${appt.patientName || "N/A"}</span></div>
+              ${appt.isForSomeoneElse && appt.bookedFor?.name ? `<div class="row"><span class="label">Booked For:</span><span class="value">${appt.bookedFor.name}${appt.bookedFor.age ? ` (Age: ${appt.bookedFor.age})` : ""}</span></div>` : ""}
             </div>
-
             <div class="section">
               <div class="section-title">💰 Payment Information</div>
-              <div class="row"><span class="label">Consultation Fee:</span><span class="value">Rs. ${appt.consultationFee?.toFixed(2) || '0.00'}</span></div>
-              <div class="row"><span class="label">Payment Status:</span><span class="value">${appt.paymentStatus === 'paid' ? '✅ Paid' : appt.paymentStatus === 'refunded' ? '🔄 Refunded' : 'Pending'}</span></div>
-              ${appt.paymentId ? `<div class="row"><span class="label">Transaction ID:</span><span class="value">${appt.paymentId}</span></div>` : ''}
+              <div class="row"><span class="label">Consultation Fee:</span><span class="value">Rs. ${appt.consultationFee?.toFixed(2) || "0.00"}</span></div>
+              <div class="row"><span class="label">Payment Status:</span><span class="value">${appt.paymentStatus === "paid" ? "✅ Paid" : appt.paymentStatus === "refunded" ? "🔄 Refunded" : "Pending"}</span></div>
+              ${appt.paymentId ? `<div class="row"><span class="label">Transaction ID:</span><span class="value">${appt.paymentId}</span></div>` : ""}
             </div>
-
-            ${appt.reason ? `<div class="section"><div class="section-title">📝 Reason for Visit</div><div class="row"><span class="value">${appt.reason}</span></div></div>` : ''}
-
-            ${appt.status === 'cancellation_requested' ? `
-              <div class="refund-box">
-                <div class="section-title" style="color: #92400e;">🔄 Cancellation & Refund Request</div>
-                <div class="row"><span class="label">Requested On:</span><span class="value">${fmtDate(appt.refundRequestedAt)}</span></div>
-                <div class="row"><span class="label">Refund Amount:</span><span class="value">Rs. ${appt.refundAmount?.toFixed(2) || '0.00'}</span></div>
-                <div class="row"><span class="label">Status:</span><span class="value">⏳ Pending Admin Approval</span></div>
-                <div class="row"><span class="label">Cancellation Reason:</span><span class="value">${appt.cancellationReason || 'No reason provided'}</span></div>
-              </div>
-            ` : ''}
-
-            ${hasRefund ? `
-              <div class="refund-box refund-processed" style="background: #dcfce7;">
-                <div class="section-title" style="color: #166534;">✅ Refund Processed</div>
-                <div class="row"><span class="label">Processed On:</span><span class="value">${fmtDate(appt.refundProcessedAt)}</span></div>
-                <div class="row"><span class="label">Refund Amount:</span><span class="value">Rs. ${appt.refundAmount?.toFixed(2) || '0.00'}</span></div>
-                ${appt.refundReference ? `<div class="row"><span class="label">Reference ID:</span><span class="value">${appt.refundReference}</span></div>` : ''}
-                ${appt.adminNotes ? `<div class="row"><span class="label">Admin Notes:</span><span class="value">${appt.adminNotes}</span></div>` : ''}
-              </div>
-            ` : ''}
-
-            ${isRejected ? `
-              <div class="refund-box refund-rejected" style="background: #fee2e2;">
-                <div class="section-title" style="color: #991b1b;">❌ Cancellation Rejected</div>
-                <div class="row"><span class="label">Admin Notes:</span><span class="value">${appt.adminNotes || 'No reason provided'}</span></div>
-                <div class="row"><span class="label">Status:</span><span class="value">Your appointment remains confirmed as scheduled.</span></div>
-              </div>
-            ` : ''}
+            ${appt.reason ? `<div class="section"><div class="section-title">📝 Reason for Visit</div><div class="row"><span class="value">${appt.reason}</span></div></div>` : ""}
+            ${appt.status === "cancellation_requested" ? `<div class="refund-box"><div class="section-title" style="color:#92400e">🔄 Cancellation & Refund Request</div><div class="row"><span class="label">Requested On:</span><span class="value">${fmtDate(appt.refundRequestedAt)}</span></div><div class="row"><span class="label">Refund Amount:</span><span class="value">Rs. ${appt.refundAmount?.toFixed(2) || "0.00"}</span></div><div class="row"><span class="label">Status:</span><span class="value">⏳ Pending Admin Approval</span></div><div class="row"><span class="label">Reason:</span><span class="value">${appt.cancellationReason || "No reason provided"}</span></div></div>` : ""}
+            ${hasRefund ? `<div class="refund-box" style="background:#dcfce7"><div class="section-title" style="color:#166534">✅ Refund Processed</div><div class="row"><span class="label">Processed On:</span><span class="value">${fmtDate(appt.refundProcessedAt)}</span></div><div class="row"><span class="label">Refund Amount:</span><span class="value">Rs. ${appt.refundAmount?.toFixed(2) || "0.00"}</span></div>${appt.refundReference ? `<div class="row"><span class="label">Reference ID:</span><span class="value">${appt.refundReference}</span></div>` : ""}${appt.adminNotes ? `<div class="row"><span class="label">Admin Notes:</span><span class="value">${appt.adminNotes}</span></div>` : ""}</div>` : ""}
+            ${isRejected ? `<div class="refund-box" style="background:#fee2e2"><div class="section-title" style="color:#991b1b">❌ Cancellation Rejected</div><div class="row"><span class="label">Admin Notes:</span><span class="value">${appt.adminNotes || "No reason provided"}</span></div></div>` : ""}
           </div>
           <div class="footer">
-            <p>This is a system-generated receipt. For any queries, please contact support.</p>
+            <p>System-generated receipt. For queries, contact support.</p>
             <p>Generated on: ${new Date().toLocaleString()}</p>
           </div>
         </div>
@@ -297,53 +520,45 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
           <button onclick="window.print()">📄 Save as PDF</button>
           <button class="close-btn" onclick="window.close()">❌ Close</button>
         </div>
-        <script>
-          // Auto-trigger print dialog after page loads
-          setTimeout(() => { window.print(); }, 500);
-        </script>
-      </body>
-      </html>
-    `);
+        <script>setTimeout(()=>window.print(),500)</script>
+        </body></html>`);
       printWindow.document.close();
     } catch (err) {
-      console.error('PDF generation error:', err);
-      alert('Failed to generate PDF. Please try again.');
+      console.error("PDF error:", err);
+      alert("Failed to generate PDF. Please try again.");
     } finally {
       setDownloading(false);
     }
   };
 
-  const hasRefund = appt.status === "cancelled" && appt.refundProcessedAt;
-  const isRejected = appt.status === "confirmed" && appt.refundRequested === true && !appt.refundProcessedAt;
-
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
-      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-[scaleIn_0.2s_ease-out]">
-        {/* Header */}
+
+        {/* Modal header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white relative">
           <button onClick={onClose} className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-
           <div className="flex items-center gap-5">
-            <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur shadow-inner flex items-center justify-center text-white text-3xl font-bold border border-white/30 overflow-hidden">
+            <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-white text-3xl font-bold border border-white/30">
               {getInitials(docName)}
             </div>
             <div>
               <p className="text-blue-100 text-xs font-bold uppercase tracking-widest mb-1">Appointment Details</p>
-              <h2 className="text-2xl font-black">{docName}</h2>
+              <h2 className="text-2xl font-black">Dr. {docName}</h2>
               <p className="text-blue-100 text-sm font-medium">{appt.specialty || "Specialist"}</p>
             </div>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-8 space-y-8 max-h-[60vh] overflow-y-auto">
-          {/* Status and Time Row */}
+        {/* Modal content */}
+        <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto">
+
+          {/* Status + time + patient number */}
           <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between bg-slate-50 p-5 rounded-2xl border border-slate-100">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">When</p>
@@ -358,12 +573,23 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
                 {sc.label}
               </span>
               {appt.refundAmount > 0 && appt.status === "cancellation_requested" && (
-                <p className="text-[10px] text-amber-600 font-semibold mt-1">Refund: Rs. {appt.refundAmount} pending admin approval</p>
+                <p className="text-[10px] text-amber-600 font-semibold mt-1">
+                  Refund: Rs. {appt.refundAmount} pending admin approval
+                </p>
               )}
             </div>
+            {appt.patientNumber && (
+              <>
+                <div className="h-px sm:h-8 sm:w-px bg-slate-200" />
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Patient No.</p>
+                  <p className="text-sm font-bold text-blue-600">#{appt.patientNumber}</p>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Fee Display */}
+          {/* Fee */}
           {appt.consultationFee > 0 && (
             <div className="flex items-center justify-between p-4 bg-green-50 rounded-xl border border-green-100">
               <span className="text-sm font-semibold text-gray-700">Amount Paid</span>
@@ -371,8 +597,8 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
             </div>
           )}
 
-          {/* Reason for Visit */}
-          <div className="space-y-3">
+          {/* Reason */}
+          <div className="space-y-2">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -380,13 +606,13 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
               Reason for Visit
             </h3>
             <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-              <p className="text-sm text-slate-600 leading-relaxed italic">{appt.reason || "No specific reason provided for this consultation."}</p>
+              <p className="text-sm text-slate-600 leading-relaxed italic">{appt.reason || "No specific reason provided."}</p>
             </div>
           </div>
 
-          {/* Guest Info if applicable */}
+          {/* Booked for someone else */}
           {appt.isForSomeoneElse && appt.bookedFor?.name && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -401,7 +627,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
             </div>
           )}
 
-          {/* Refund Processed Section */}
+          {/* Refund processed */}
           {hasRefund && (
             <div className="bg-green-50 p-4 rounded-xl border border-green-100">
               <h3 className="text-sm font-bold text-green-700 flex items-center gap-2 mb-3">
@@ -413,84 +639,128 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-gray-600">Refund Amount:</span><span className="font-semibold text-green-700">Rs. {appt.refundAmount?.toFixed(2)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-600">Processed On:</span><span className="text-gray-700">{fmtDate(appt.refundProcessedAt)}</span></div>
-                {appt.refundReference && <div className="flex justify-between"><span className="text-gray-600">Reference ID:</span><span className="text-gray-700 font-mono text-xs">{appt.refundReference}</span></div>}
-                {appt.adminNotes && <div className="mt-2 p-2 bg-white/50 rounded-lg"><span className="text-gray-600 text-xs">Admin Note:</span><p className="text-xs text-gray-500 mt-1">{appt.adminNotes}</p></div>}
+                {appt.refundReference && <div className="flex justify-between"><span className="text-gray-600">Reference ID:</span><span className="font-mono text-xs text-gray-700">{appt.refundReference}</span></div>}
+                {appt.adminNotes && <div className="mt-2 p-2 bg-white/50 rounded-lg"><p className="text-[10px] text-gray-500">{appt.adminNotes}</p></div>}
               </div>
             </div>
           )}
 
-          {/* Rejected Cancellation Section */}
+          {/* Cancellation rejected */}
           {isRejected && (
             <div className="bg-red-50 p-4 rounded-xl border border-red-100">
-              <h3 className="text-sm font-bold text-red-700 flex items-center gap-2 mb-3">
+              <h3 className="text-sm font-bold text-red-700 flex items-center gap-2 mb-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
                 Cancellation Request Rejected
               </h3>
-              <div className="space-y-2">
-                <p className="text-sm text-red-600">Your cancellation request was reviewed and rejected by admin.</p>
-                {appt.adminNotes && (<div className="mt-2 p-2 bg-white/50 rounded-lg"><span className="text-gray-600 text-xs">Admin Note:</span><p className="text-xs text-gray-500 mt-1">{appt.adminNotes}</p></div>)}
-                <p className="text-xs text-gray-500 mt-2">Your appointment remains confirmed as scheduled.</p>
-              </div>
+              <p className="text-sm text-red-600">Your cancellation request was reviewed and rejected.</p>
+              {appt.adminNotes && <p className="text-xs text-gray-500 mt-2">{appt.adminNotes}</p>}
+              <p className="text-xs text-gray-400 mt-1">Your appointment remains confirmed as scheduled.</p>
             </div>
           )}
 
           {/* Actions */}
-          <div className="space-y-3 pt-2">
+          <div className="space-y-3 pt-1">
             {cancelStep === "view" ? (
               <>
-                {/* Download Receipt Button */}
-                <button onClick={handleDownloadReceipt} disabled={downloading}
-                  className="w-full py-3 rounded-2xl border-2 border-blue-200 text-blue-600 font-bold text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2">
-                  {downloading ? (<svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>) : (<><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download Receipt / Details</>)}
+                {/* Download receipt */}
+                <button
+                  onClick={handleDownloadReceipt}
+                  disabled={downloading}
+                  className="w-full py-3 rounded-2xl border-2 border-blue-200 text-blue-600 font-bold text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                >
+                  {downloading
+                    ? <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                    : <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download Receipt / Details</>
+                  }
                 </button>
 
-
-                {/* Join in-app video consultation */}
-                {status === "confirmed" && (
-                  <button onClick={handleJoinVideoConsultation} className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-
+                {/* Join video — today's confirmed appointments only */}
+                {status === "confirmed" && isToday && (
+                  <button
+                    onClick={handleJoinVideoConsultation}
+                    className="w-full py-4 rounded-2xl bg-blue-600 text-white font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-3"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
                     Join Video Consultation
                   </button>
                 )}
 
                 <div className="flex gap-3">
-                  {(status === "confirmed") && (
-                    <button onClick={() => setCancelStep("confirm")} className="flex-1 py-3.5 rounded-2xl border-2 border-slate-100 text-slate-400 text-xs font-bold hover:bg-red-50 hover:border-red-100 hover:text-red-500 transition-all flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  {/* Cancel — not available for today's appointments */}
+                  {status === "confirmed" && !isToday && (
+                    <button
+                      onClick={() => setCancelStep("confirm")}
+                      className="flex-1 py-3.5 rounded-2xl border-2 border-slate-100 text-slate-400 text-xs font-bold hover:bg-red-50 hover:border-red-100 hover:text-red-500 transition-all flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                       Cancel Appointment
                     </button>
                   )}
-                  <button onClick={onClose} className="flex-1 py-3.5 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all">Close</button>
+                  {/* Note shown instead of cancel button on today's appointments */}
+                  {status === "confirmed" && isToday && (
+                    <p className="flex-1 text-center text-[11px] text-gray-400 self-center leading-snug">
+                      Same-day cancellations unavailable.
+                      <br />Contact support if needed.
+                    </p>
+                  )}
+                  <button
+                    onClick={onClose}
+                    className="flex-1 py-3.5 rounded-2xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all"
+                  >
+                    Close
+                  </button>
                 </div>
               </>
             ) : (
-              <div className="space-y-4 animate-[slideUp_0.2s_ease-out]">
+              <div className="space-y-4">
                 <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
-                  <p className="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    Refund Policy
-                  </p>
+                  <p className="text-xs font-semibold text-amber-700 mb-2">Refund Policy</p>
                   <div className="space-y-1 text-xs text-amber-600">
                     <p className="flex justify-between"><span>✓ 24+ hours before:</span><span className="font-semibold">100% refund</span></p>
-                    <p className="flex justify-between"><span>✓ 12-24 hours before:</span><span className="font-semibold">50% refund</span></p>
-                    <p className="flex justify-between"><span>✓ 6-12 hours before:</span><span className="font-semibold">25% refund</span></p>
+                    <p className="flex justify-between"><span>✓ 12–24 hours before:</span><span className="font-semibold">50% refund</span></p>
+                    <p className="flex justify-between"><span>✓ 6–12 hours before:</span><span className="font-semibold">25% refund</span></p>
                     <p className="flex justify-between"><span>✗ Less than 6 hours:</span><span className="font-semibold">No refund</span></p>
                   </div>
-                  <div className="mt-3 pt-2 border-t border-amber-200"><p className="text-[10px] text-amber-500">Refunds require admin approval and will be processed within 3-5 business days</p></div>
+                  <p className="text-[10px] text-amber-500 mt-2 pt-2 border-t border-amber-200">
+                    Refunds require admin approval and are processed within 3–5 business days.
+                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Please provide a reason for cancellation</label>
-                  <textarea autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g., I have a personal emergency..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-200 transition-all resize-none h-24" />
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">
+                    Reason for cancellation
+                  </label>
+                  <textarea
+                    autoFocus
+                    value={reason}
+                    onChange={e => setReason(e.target.value)}
+                    placeholder="e.g., I have a personal emergency..."
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-200 transition-all resize-none h-24"
+                  />
                 </div>
 
                 <div className="flex gap-3">
-                  <button onClick={() => setCancelStep("view")} className="flex-1 py-3.5 rounded-2xl border border-slate-100 text-slate-500 text-xs font-bold hover:bg-slate-50 transition-all">Back</button>
-                  <button onClick={() => onCancel(appt._id, reason)} disabled={cancelling === appt._id || !reason.trim()} className="flex-[2] py-3.5 rounded-2xl bg-red-600 text-white text-xs font-black shadow-lg shadow-red-200 hover:bg-red-700 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2">
-                    {cancelling === appt._id ? (<svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>) : (<>Request Cancellation{appt.consultationFee > 0 && <span className="text-[10px] opacity-80">(Refund eligibility checked)</span>}</>)}
+                  <button
+                    onClick={() => setCancelStep("view")}
+                    className="flex-1 py-3.5 rounded-2xl border border-slate-100 text-slate-500 text-xs font-bold hover:bg-slate-50 transition-all"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={() => onCancel(appt._id, reason)}
+                    disabled={cancelling === appt._id || !reason.trim()}
+                    className="flex-[2] py-3.5 rounded-2xl bg-red-600 text-white text-xs font-black shadow-lg shadow-red-200 hover:bg-red-700 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
+                  >
+                    {cancelling === appt._id
+                      ? <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                      : <>Request Cancellation {appt.consultationFee > 0 && <span className="text-[10px] opacity-80">(Refund eligibility checked)</span>}</>
+                    }
                   </button>
                 </div>
               </div>
@@ -501,7 +771,6 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
 
       <style jsx>{`
         @keyframes scaleIn { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:scale(1); } }
-        @keyframes slideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
       `}</style>
     </div>,
     document.body
@@ -509,7 +778,7 @@ function AppointmentDetailModal({ open, appt, onClose, onCancel, cancelling }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STAT CARD COMPONENT
+// STAT CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STAT_THEME = {
@@ -517,7 +786,7 @@ const STAT_THEME = {
   green: { bg: "bg-green-50", iconBg: "bg-green-100  text-green-600", val: "text-green-700" },
   amber: { bg: "bg-amber-50", iconBg: "bg-amber-100  text-amber-600", val: "text-amber-700" },
   purple: { bg: "bg-purple-50", iconBg: "bg-purple-100 text-purple-600", val: "text-purple-700" },
-  cyan: { bg: "bg-cyan-50", iconBg: "bg-cyan-100 text-cyan-600", val: "text-cyan-700" },
+  cyan: { bg: "bg-cyan-50", iconBg: "bg-cyan-100   text-cyan-600", val: "text-cyan-700" },
 };
 
 function StatCard({ label, value, icon, color, loading }) {
@@ -525,7 +794,13 @@ function StatCard({ label, value, icon, color, loading }) {
   return (
     <div className={`${c.bg} rounded-2xl p-5 flex items-center gap-4 border border-white shadow-sm`}>
       <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${c.iconBg}`}>{icon}</div>
-      <div><p className="text-xs font-medium text-gray-500 mb-0.5">{label}</p>{loading ? <div className="h-7 w-10 bg-white/60 rounded animate-pulse mt-0.5" /> : <p className={`text-2xl font-bold ${c.val}`}>{value ?? 0}</p>}</div>
+      <div>
+        <p className="text-xs font-medium text-gray-500 mb-0.5">{label}</p>
+        {loading
+          ? <div className="h-7 w-10 bg-white/60 rounded animate-pulse mt-0.5" />
+          : <p className={`text-2xl font-bold ${c.val}`}>{value ?? 0}</p>
+        }
+      </div>
     </div>
   );
 }
@@ -535,13 +810,14 @@ function StatCard({ label, value, icon, color, loading }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function AppointmentsPage() {
-  const router = useRouter();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(null);
   const [selectedAppt, setSelectedAppt] = useState(null);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all"); // all, upcoming, past, today
+  const [filter, setFilter] = useState("all");
+
+  const now = useNow(10_000);
 
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
@@ -556,11 +832,12 @@ export default function AppointmentsPage() {
       if (upRes.status === "fulfilled") all = [...all, ...(upRes.value.data.appointments || upRes.value.data || [])];
       if (pastRes.status === "fulfilled") all = [...all, ...(pastRes.value.data.appointments || pastRes.value.data || [])];
 
-      // Show ALL appointments (confirmed, completed, cancelled, cancellation_requested)
       const allAppointments = all.filter(a =>
-        a.status === "confirmed" || a.status === "completed" || a.status === "cancelled" || a.status === "cancellation_requested"
+        a.status === "confirmed" ||
+        a.status === "completed" ||
+        a.status === "cancelled" ||
+        a.status === "cancellation_requested"
       );
-
       allAppointments.sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
       setAppointments(allAppointments);
     } catch (err) {
@@ -576,79 +853,213 @@ export default function AppointmentsPage() {
   const handleCancel = async (id, reason) => {
     setCancelling(id);
     try {
-      const response = await axios.put(`${API_BASE}/appointments/${id}/cancel`, { reason }, { headers: authHeaders() });
+      const response = await axios.put(
+        `${API_BASE}/appointments/${id}/cancel`,
+        { reason },
+        { headers: authHeaders() }
+      );
       if (response.data.refundAmount > 0) alert(response.data.message);
-      else alert(`Appointment cancelled successfully.\n\nNo refund applicable.`);
+      else alert("Appointment cancelled successfully.\n\nNo refund applicable.");
       await fetchAppointments();
       setSelectedAppt(null);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to cancel. Please try again.");
-    } finally { setCancelling(null); }
+    } finally {
+      setCancelling(null);
+    }
   };
 
-  const now = new Date();
+  // ── Derived lists ─────────────────────────────────────────────────────────
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayEnd = new Date(todayStart);
-  todayEnd.setDate(todayEnd.getDate() + 1);
+  const todayEnd = new Date(todayStart.getTime() + 86_400_000);
 
-  const upcoming = appointments.filter(a => new Date(a.dateTime) >= now && a.status !== "cancelled" && a.status !== "rejected").sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
-  const past = appointments.filter(a => new Date(a.dateTime) < now || a.status === "cancelled" || a.status === "rejected" || a.status === "cancellation_requested").sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
-  const today = appointments.filter(a => {
-    const aptDate = new Date(a.dateTime);
-    return aptDate >= todayStart && aptDate < todayEnd && a.status !== "cancelled" && a.status !== "rejected";
-  }).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+  const upcoming = appointments
+    .filter(a => new Date(a.dateTime) >= now && a.status !== "cancelled" && a.status !== "rejected")
+    .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
 
-  const filteredAppointments = filter === "upcoming" ? upcoming : filter === "past" ? past : filter === "today" ? today : appointments;
-  const totalUpcoming = upcoming.length;
-  const totalPast = past.length;
-  const totalToday = today.length;
+  const past = appointments
+    .filter(a =>
+      new Date(a.dateTime) < now ||
+      a.status === "cancelled" ||
+      a.status === "rejected" ||
+      a.status === "cancellation_requested"
+    )
+    .sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+
+  const today = appointments
+    .filter(a => {
+      const d = new Date(a.dateTime);
+      return d >= todayStart && d < todayEnd && a.status !== "cancelled" && a.status !== "rejected";
+    })
+    .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+  const filteredAppointments =
+    filter === "upcoming" ? upcoming :
+      filter === "past" ? past :
+        filter === "today" ? today :
+          appointments;
+
   const pendingCancellations = appointments.filter(a => a.status === "cancellation_requested").length;
   const totalRefunded = appointments.filter(a => a.status === "cancelled" && a.refundProcessedAt).length;
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppointmentDetailModal open={!!selectedAppt} appt={selectedAppt} onClose={() => setSelectedAppt(null)} onCancel={handleCancel} cancelling={cancelling} />
+      <AppointmentDetailModal
+        open={!!selectedAppt}
+        appt={selectedAppt}
+        onClose={() => setSelectedAppt(null)}
+        onCancel={handleCancel}
+        cancelling={cancelling}
+      />
 
-      {/* Header */}
+      {/* ── Page header ───────────────────────────────────────────────────── */}
       <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-cyan-600 px-4 sm:px-6 pt-10 pb-16 relative overflow-hidden">
         <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-white/5 blur-2xl" />
         <div className="absolute bottom-0 left-10 w-32 h-32 rounded-full bg-cyan-400/10 blur-xl" />
         <div className="relative max-w-5xl mx-auto">
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <div><h1 className="text-2xl sm:text-3xl font-extrabold text-white">My Appointments</h1><p className="text-blue-200 text-sm mt-1">View and manage all your healthcare appointments</p></div>
-            <Link href="/dashboard/doctors" className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-blue-600 text-sm font-bold hover:bg-blue-50 shadow-lg transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>Book New</Link>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white">My Appointments</h1>
+              <p className="text-blue-200 text-sm mt-1">View and manage all your healthcare appointments</p>
+            </div>
+            <Link
+              href="/dashboard/doctors"
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-blue-600 text-sm font-bold hover:bg-blue-50 shadow-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Book New
+            </Link>
           </div>
+
+          {/* Stat cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mt-6">
-            <StatCard loading={loading} label="Upcoming" value={totalUpcoming} color="blue" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
-            <StatCard loading={loading} label="Today" value={totalToday} color="cyan" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
-            <StatCard loading={loading} label="Past" value={totalPast} color="purple" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
+            <StatCard loading={loading} label="Upcoming" value={upcoming.length} color="blue" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
+            <StatCard loading={loading} label="Today" value={today.length} color="cyan" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
+            <StatCard loading={loading} label="Past" value={past.length} color="purple" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
             <StatCard loading={loading} label="Pending Cancellations" value={pendingCancellations} color="amber" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
             <StatCard loading={loading} label="Refunds Processed" value={totalRefunded} color="green" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
           </div>
         </div>
       </div>
 
+      {/* ── Body ──────────────────────────────────────────────────────────── */}
       <div className="relative max-w-5xl mx-auto px-4 sm:px-6 -mt-8 pb-12 space-y-6">
-        {error && (<div className="flex items-center gap-2.5 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600"><svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>{error}<button onClick={fetchAppointments} className="ml-auto text-xs underline font-semibold">Retry</button></div>)}
 
-        {pendingCancellations > 0 && (<div className="bg-amber-50 border border-amber-200 rounded-xl p-4"><div className="flex items-start gap-3"><svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><div><p className="text-sm font-bold text-amber-800">Cancellation Request Pending</p><p className="text-xs text-amber-700">You have {pendingCancellations} cancellation request{pendingCancellations !== 1 ? "s" : ""} awaiting admin approval. Refunds will be processed within 3-5 business days.</p></div></div></div>)}
+        {/* Error banner */}
+        {error && (
+          <div className="flex items-center gap-2.5 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
+            <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            {error}
+            <button onClick={fetchAppointments} className="ml-auto text-xs underline font-semibold">Retry</button>
+          </div>
+        )}
 
-        {/* Filter Tabs */}
+        {/* Pending cancellation alert */}
+        {pendingCancellations > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-sm font-bold text-amber-800">Cancellation Request Pending</p>
+                <p className="text-xs text-amber-700">
+                  You have {pendingCancellations} cancellation request{pendingCancellations !== 1 ? "s" : ""} awaiting admin approval.
+                  Refunds will be processed within 3–5 business days.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── TODAY'S LIVE SECTION ─────────────────────────────────────────── */}
+        <TodayAppointmentsSection
+          appointments={appointments}
+          now={now}
+          onClick={setSelectedAppt}
+        />
+
+        {/* ── Filter tabs ──────────────────────────────────────────────────── */}
         <div className="flex gap-1 sm:gap-2 border-b border-gray-200 pb-2 overflow-x-auto">
-          <button onClick={() => setFilter("all")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "all" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-black hover:text-gray-700"}`}>All Appointments</button>
-          <button onClick={() => setFilter("upcoming")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "upcoming" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-black hover:text-gray-700"}`}>Upcoming</button>
-          <button onClick={() => setFilter("today")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "today" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-black hover:text-gray-700"}`}>Today</button>
-          <button onClick={() => setFilter("past")} className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${filter === "past" ? "bg-white text-blue-600 border-b-2 border-blue-500" : "text-black hover:text-gray-700"}`}>Past & Cancelled</button>
+          {[
+            { key: "all", label: "All Appointments" },
+            { key: "upcoming", label: "Upcoming" },
+            { key: "today", label: "Today" },
+            { key: "past", label: "Past & Cancelled" },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap
+                ${filter === key
+                  ? "bg-white text-blue-600 border-b-2 border-blue-500"
+                  : "text-black hover:text-gray-700"}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* Appointments List */}
+        {/* ── Appointments list ─────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-blue-50/40">
-            <div><h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">Appointments{filteredAppointments.length > 0 && <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">{filteredAppointments.length}</span>}</h2><p className="text-xs text-gray-400 mt-0.5">{filter === "all" ? "All your appointments" : filter === "upcoming" ? "Upcoming confirmed appointments" : filter === "today" ? "Appointments scheduled for today" : "Past, cancelled, and refunded appointments"}</p></div>
-            <button onClick={fetchAppointments} className="text-xs text-blue-600 font-bold hover:underline">Refresh</button>
+            <div>
+              <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                Appointments
+                {filteredAppointments.length > 0 && (
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+                    {filteredAppointments.length}
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {filter === "all" ? "All your appointments" :
+                  filter === "upcoming" ? "Upcoming confirmed appointments" :
+                    filter === "today" ? "Appointments scheduled for today" :
+                      "Past, cancelled, and refunded appointments"}
+              </p>
+            </div>
+            <button onClick={fetchAppointments} className="text-xs text-blue-600 font-bold hover:underline">
+              Refresh
+            </button>
           </div>
+
           <div className="p-4 space-y-3 max-h-[600px] overflow-y-auto">
-            {loading ? ([1, 2, 3].map((i) => (<div key={i} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 animate-pulse"><div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" /><div className="flex-1 space-y-2"><div className="h-3.5 w-32 bg-gray-200 rounded" /><div className="h-2.5 w-48 bg-gray-100 rounded" /></div></div>))) : filteredAppointments.length === 0 ? (<div className="flex flex-col items-center py-10 text-center"><div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-2xl mb-3">📅</div><p className="text-sm font-semibold text-gray-700">No appointments found</p><p className="text-xs text-gray-400 mt-1">{filter === "today" ? "You have no appointments scheduled for today." : "Book a new appointment to get started"}</p><Link href="/dashboard/doctors" className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">Find a Doctor →</Link></div>) : (filteredAppointments.map((appt) => (<AppointmentCard key={appt._id} appt={appt} onClick={setSelectedAppt} />)))}
+            {loading ? (
+              [1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3 animate-pulse">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3.5 w-32 bg-gray-200 rounded" />
+                    <div className="h-2.5 w-48 bg-gray-100 rounded" />
+                  </div>
+                </div>
+              ))
+            ) : filteredAppointments.length === 0 ? (
+              <div className="flex flex-col items-center py-10 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-2xl mb-3">📅</div>
+                <p className="text-sm font-semibold text-gray-700">No appointments found</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {filter === "today" ? "You have no appointments scheduled for today." : "Book a new appointment to get started"}
+                </p>
+                <Link href="/dashboard/doctors" className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold">
+                  Find a Doctor →
+                </Link>
+              </div>
+            ) : (
+              filteredAppointments.map(appt => (
+                <AppointmentCard
+                  key={appt._id}
+                  appt={appt}
+                  now={now}
+                  onClick={setSelectedAppt}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>
